@@ -42,6 +42,7 @@ class NodeClient (Thread):
 
     def run(self):
         print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): entered run \033[0m")
+        print("Command Syntax: COMMAND|MESSAGE|PARAMS")
         try:
             while self._running:
                 events = self._selector.select(timeout=1)
@@ -59,7 +60,6 @@ class NodeClient (Thread):
             self._selector.close()
 
     def _read(self, key):
-        print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): entered read \033[94m")
         recv_data = self._sock.recv(1024).decode()
         if recv_data:
             print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): received", repr(recv_data), "from connection", repr(key.fileobj.getpeername()) + "\033[94m")
@@ -69,7 +69,6 @@ class NodeClient (Thread):
             self._sock.close()
 
     def _write(self, key):
-        print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): entered write \033[0m")
         try:
             message = self._outgoing_buffer.get_nowait()
         except queue.Empty:

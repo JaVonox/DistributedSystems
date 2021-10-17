@@ -7,7 +7,7 @@ class HeartbeatModule:
         self._myOwnerIP = 0
         self._myOwnerPort = 0
 
-    def DefineSelf(self,myOwnerIP,myOwnerPort):
+    def DefineSelf(self,myOwnerIP,myOwnerPort): #TODO add usage
         self._myOwnerIP = myOwnerIP #defines the module owner
         self._myOwnerPort = myOwnerPort
 
