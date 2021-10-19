@@ -1,38 +1,20 @@
 """
-    A node will represent any item in our distributed system.
-
-    It should be capable of:
-        accepting incoming connections on a known port (NodeServer.py)
-        processing data from that server (NodeServerThread.py)
-
-        Creating connections to other Servers (NodeClient.py)
-
-        We will likely need specialised variants of these - at the moment they just echo data.
-
-        Tasks:
-            Step 1: Create a combined node class that can create servers and clients
-            Step 2: The node should default to a known address, checking for the existance of a prime node
-            Step 3: If there is a prime node, create a client to server connection to it, register ourselves
-            Step 4: Add some kind of functionality to create server/clients on demand
-                prime node sends "CREATE SERVER 127.0.0.1 12345"
-                prime node sends "CONNECT 127.0.0.1 12345"
-                prime node sends "RECONNECT AUTHSERVER 127.0.0.1 12345"
-                etc.
-            Step 5: Create a few simple specialised node classes e.g.
-                echoNode
-                pingNode
-                etc. (these will later replace their functionality with something sensible)
-
+Clients are redirected to their service node - data does *not* pass through the control node to external nodes.
+Use multiprocessing
 """
+
+
 import NodeClient
 import ThreadHandler
+import multiprocessing
+import sys
 
 #Modules
 import MODULEHeartbeat
 import MODULEEcho
 import MODULEDict
 
-class NodeGen:
+class NodeGen():
     def __init__(self,typeParam):
         self._connectedPort = 0
         self._IP = "127.0.0.1"
@@ -43,6 +25,7 @@ class NodeGen:
         self._modules = {}
 
         self.AppendModules()
+
 
     #TODO Add ability to make new nodes. These should be initialised with required modules (including service module which should handle its events and read/write)
     def CreateServer(self,attemptPrime): #Creates a thread listener
@@ -65,7 +48,7 @@ class NodeGen:
         self._modules['Service'].start()
         self.LoopNode()
 
-    def CreateClient(self):
+    def CreateClient(self): #Autoconnects to prime node
         if self._modules['Heartbeat'].HeartbeatPort("127.0.0.1",51321):
             self._modules['Service'] = NodeClient.NodeClient("ConnectingClient", self._IP, 51321)
             self._connectedPort = self._modules['Service'].get_port()
@@ -85,6 +68,10 @@ class NodeGen:
                 self._modules['Service'].writeCommands.append(self.CommandParser(self._modules['Service'].readCommands[0])) #Interpret command and return result
                 del self._modules['Service'].readCommands[0]
 
+    def run(self): #allows .start()
+        pass
+
+
     def CommandParser(self,input): #TODO add any error checking to this
         command = input.split("|") #Sender ID,Command,Message
 
@@ -94,9 +81,13 @@ class NodeGen:
             return command[0] + "|" + self._modules['Echo'].RequestEcho(command[2]) #return value provided by echo module
         elif command[1] == "ECHODUMP" and self._modules.__contains__('Echo'):
             return command[0] + "|" + self._modules['Echo'].DumpEcho()  # return all echos
+        elif command[1] == "CREATE" and self._modules.__contains__('NodeSpawn'): #TODO rework this to take in CREATE types. also allow nodes to decide to create nodes themselves
+            multiprocessing.Process(target=GenerateNewNode, args=("Control",)).start() #makes a new node via multiprocessing
+            #TODO check for failure?
+            return command[0] + "|New Control Node Generated"
         elif command[1] == "DICTADD" and self._modules.__contains__('Dict'):
             self._modules['Dict'].AddToDict(command[2],command[3])  # Add parameter and key to dictionary
-            return command[0] + "| Added value to dictionary"
+            return command[0] + "|Added value to dictionary"
         elif command[1] == "DICT" and self._modules.__contains__('Dict'):
             return command[0] + "|" + self._modules['Dict'].Define(command[2])  # returns value of key
         else:
@@ -109,6 +100,7 @@ class NodeGen:
         if self._nodeType == "Control":
             self._modules['Echo'] = MODULEEcho.EchoModule()
             self._modules['Dict'] = MODULEDict.DictModule()
+            self._modules['NodeSpawn'] = MODULEDict.DictModule() #TODO temp module
             self.CreateServer(True)
         elif self._nodeType == "Client":
             self.CreateClient()
@@ -117,3 +109,16 @@ class NodeGen:
         elif self._nodeType == "Dictionary":
             self.CreateServer(False)
 
+def GenerateNewNode(nodeType):
+    NodeGen(nodeType) #spawns up new node of specified type
+
+
+if __name__ == "__main__": #stops multiprocessing from calling function before GenerateNewNode
+    nodeRequest = input("Create node:")
+
+    if nodeRequest == "Control":
+        GenerateNewNode("Control")
+    elif nodeRequest == "Client":
+        GenerateNewNode("Client")
+    elif nodeRequest == "Echo":
+        GenerateNewNode("Echo")
