@@ -6,7 +6,8 @@ Use multiprocessing
 
 import NodeClient
 import ThreadHandler
-import multiprocessing
+import subprocess
+
 import sys
 
 #Modules
@@ -82,8 +83,8 @@ class NodeGen():
         elif command[1] == "ECHODUMP" and self._modules.__contains__('Echo'):
             return command[0] + "|" + self._modules['Echo'].DumpEcho()  # return all echos
         elif command[1] == "CREATE" and self._modules.__contains__('NodeSpawn'): #TODO rework this to take in CREATE types. also allow nodes to decide to create nodes themselves
-            multiprocessing.Process(target=GenerateNewNode, args=("Control",)).start() #makes a new node via multiprocessing
             #TODO check for failure?
+            subprocess.Popen(['python', 'Node.py','Control'],creationflags=subprocess.CREATE_NEW_CONSOLE) #subprocessing based node generation. Adds argument control to define node type to generate
             return command[0] + "|New Control Node Generated"
         elif command[1] == "DICTADD" and self._modules.__contains__('Dict'):
             self._modules['Dict'].AddToDict(command[2],command[3])  # Add parameter and key to dictionary
@@ -112,13 +113,15 @@ class NodeGen():
 def GenerateNewNode(nodeType):
     NodeGen(nodeType) #spawns up new node of specified type
 
-
-if __name__ == "__main__": #stops multiprocessing from calling function before GenerateNewNode
+print(str(sys.argv))
+if len(sys.argv) > 1:
+    nodeRequest = sys.argv[1] #argument 1 defines the node type
+else:
     nodeRequest = input("Create node:")
 
-    if nodeRequest == "Control":
-        GenerateNewNode("Control")
-    elif nodeRequest == "Client":
-        GenerateNewNode("Client")
-    elif nodeRequest == "Echo":
-        GenerateNewNode("Echo")
+if nodeRequest == "Control":
+    GenerateNewNode("Control")
+elif nodeRequest == "Client":
+    GenerateNewNode("Client")
+elif nodeRequest == "Echo":
+    GenerateNewNode("Echo")
