@@ -39,7 +39,6 @@ class ThreadHandler (Thread):
         conn.setblocking(False)
 
         module = None
-
         module = ReadWrite.ReadWrite(conn, addr, self._port, self._host, self._threadNamer)
         self._threads[self._threadNamer] = module
         self._threadNamer = self._threadNamer + 1
@@ -80,6 +79,14 @@ class ThreadHandler (Thread):
         for z in commandsToKill: #clear all processed commands
             del self.writeCommands[int(z)]
 
+    def ContactParent(self,parentIP,parentPort,nodeType):
+        sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #sockVar.setblocking(False)
+        sockVar.connect((parentIP,parentPort))
 
 
-
+        module = ReadWrite.ReadWrite(sockVar, (parentIP,parentPort), self._port, self._host, self._threadNamer)
+        self._threads[self._threadNamer] = module
+        self._threadNamer = self._threadNamer + 1
+        module.start()
+        module.postMessage("REG|" + nodeType + "|" + str(self._host) + "|" + str(self._port))

@@ -23,3 +23,15 @@ class HeartbeatModule:
         else:
             print(f"Server({self._myOwnerIP},{self._myOwnerPort})HB: heartbeat to ({IP},{Port}) failed")
             return False
+
+
+    def FindNextPort(self,IP,startingPort): #iterate through ports on ip to find next available port
+        desiredPort = startingPort  # next available port
+
+        while True:
+            if self.HeartbeatPort(IP, desiredPort):
+                desiredPort = desiredPort + 1
+            else:
+                break
+
+        return desiredPort
