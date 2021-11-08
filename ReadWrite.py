@@ -29,7 +29,6 @@ class ReadWrite (Thread):
         self._running = False
 
     def run(self):
-        print("\033[92m" + f"Server({self._myIP},{self._myPort})RWT{self.myName}: entered run on {self._sock.getsockname()}" + "\033[0m")
         try:
             while self._running:
                 events = self._selector.select(timeout=1)
@@ -49,7 +48,7 @@ class ReadWrite (Thread):
     def _read(self, key):
         recv_data = self._sock.recv(1024).decode()
         if recv_data:
-            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: received", repr(recv_data), "from connection", repr(key.fileobj.getpeername()))
+            print(f"Client({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
             self._readBuffer.append(recv_data) #adds read data into the read buffer
         if not recv_data:
             print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: closing connection on " , repr(key.fileobj.getpeername()))
@@ -64,7 +63,7 @@ class ReadWrite (Thread):
         if message == "#":
             pass #Switches to read mode if the output message is the NOOP (#) command
         elif message:
-            print("\033[92m" + f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' \033[0m")
+            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}'")
             sent = self._sock.send(message.encode())
 
     def OffloadCommands(self): #return all stored reads and clear the buffer

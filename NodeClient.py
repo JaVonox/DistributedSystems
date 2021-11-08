@@ -4,6 +4,8 @@ import selectors
 from threading import Thread
 import types
 
+import ReadWrite
+
 class NodeClient (Thread):
     def __init__(self, name, host="127.0.0.1", port=12346):
         Thread.__init__(self)
@@ -41,8 +43,8 @@ class NodeClient (Thread):
         self._running = False
 
     def run(self):
-        print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): entered run \033[0m")
-        print("Command Syntax: COMMAND|MESSAGE|PARAMS")
+        self._configureServer()
+        print("Command Syntax: COMMAND|PARAMS")
         try:
             while self._running:
                 events = self._selector.select(timeout=1)
@@ -62,7 +64,7 @@ class NodeClient (Thread):
     def _read(self, key):
         recv_data = self._sock.recv(1024).decode()
         if recv_data:
-            print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): received", repr(recv_data), "from connection", repr(key.fileobj.getpeername()) + "\033[94m")
+            print(f"Server({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
         if not recv_data:
             print(f"Client({self._ownIP},{self._ownPort}): closing connection", repr(key))
             self._selector.unregister(self._sock)
@@ -74,8 +76,19 @@ class NodeClient (Thread):
         except queue.Empty:
             message = None
         if message:
-            print("\033[94m" + f"Client({self._ownIP},{self._ownPort}): sent message '{message}' \033[0m")
+            print(f"Client({self._ownIP},{self._ownPort}): sent message '{message}'")
             sent = self._sock.send(message.encode())
+
+    def _configureServer(self):
+        self._listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Avoid bind() exception: OSError: [Errno 48] Address already in use
+        self._listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._listening_socket.bind((self._ownIP, self._ownPort))
+        self._listening_socket.listen()
+
+        print(f"Client({self._ownIP},{self._ownPort}): listening on", (self._ownIP, self._ownPort))
+        # self._listening_socket.setblocking(False)
+        self._selector.register(self._listening_socket, selectors.EVENT_READ, data=None)
 
     def postMessage(self, message):
         self._outgoing_buffer.put(message)

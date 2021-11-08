@@ -82,11 +82,10 @@ class ThreadHandler (Thread):
         for z in commandsToKill: #clear all processed commands
             del self.writeCommands[int(z)]
 
-    def ContactParent(self,parentIP,parentPort,nodeType,commands):
+    def ContactParent(self,parentIP,parentPort,nodeType,commands): #For parents
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #sockVar.setblocking(False)
         sockVar.connect((parentIP,parentPort))
-
+        sockVar.setblocking(False)
 
         module = ReadWrite.ReadWrite(sockVar, (parentIP,parentPort), self._port, self._host, self._threadNamer)
         self._threads[self._threadNamer] = module
@@ -98,18 +97,18 @@ class ThreadHandler (Thread):
             message += "|" + x
 
         module.postMessage(message) #Tell parent what IP and Port this node exists on
-        #TODO maybe close connection?
 
-    def ContactNew(self,newIP,newPort,message):
+    def Contact(self,newIP,newPort,message): #For clients
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((newIP,newPort))
+        sockVar.setblocking(False)
 
         module = ReadWrite.ReadWrite(sockVar, (newIP,newPort), self._port, self._host, self._threadNamer)
         self._threads[self._threadNamer] = module
         self._threadNamer = self._threadNamer + 1
         module.start()
 
-        module.postMessage(message) #Tell parent what IP and Port this node exists on
+        module.postMessage(message) #Attempt to send message to client on listening socket
 
     def GetThreadInfo(self,threadID): #Return the IP and Port of a specified ReadWrite Thread
         return self._threads[int(threadID)].GetSocket()

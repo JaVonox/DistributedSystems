@@ -66,14 +66,15 @@ class NodeGen():
 
     def CreateClient(self): #Autoconnects to prime node
         if self._modules['Heartbeat'].HeartbeatPort("127.0.0.1",51321):
-            self._modules['Service'] = NodeClient.NodeClient("Service", self._IP, 51321)
-            self._connectedPort = self._modules['Service'].get_port()
-            self._modules['Service'].start()
-            print(f"Client({self._modules['Service'].get_ip()},{self._modules['Service'].get_port()}): initialised")
+            self._modules['Client'] = NodeClient.NodeClient("Client", self._IP, 51321)
+            self._connectedPort = self._modules['Client'].get_port()
+            self._modules['Client'].start()
+
+            print(f"Client({self._modules['Client'].get_ip()},{self._modules['Client'].get_port()}): initialised")
 
             while True:
                 request = input("")
-                self._modules['Service'].postMessage(request)
+                self._modules['Client'].postMessage(request)
 
         else:
             print(f"Client: prime node does not exist. Client could not be initialised")
@@ -95,7 +96,7 @@ class NodeGen():
         #RouteThread|Command|Argument1|Argument2 etc.
 
         #TODO remove ability for client to send @ manually?
-        if command[1][0] == "@":
+        if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @)
             if command[1] == "@REG":
                 newChild = NodeChild(command[2],command[3],command[4],command[0])
@@ -107,8 +108,9 @@ class NodeGen():
             elif command[1] == "@RED": #This command is sent to a child and tells them to create a new connection with the specified IP/PORT, then send the results of an operation
                 #TODO May need reworking?
                 #Sends message to client with response data
-                self._modules['Service'].ContactNew(str(command[2]),int(command[3]),self._commandHandlers[command[4]].CommandPoll(command[4],command[5:]))
-
+                self._modules['Service'].Contact(str(command[2]),int(command[3]),self._commandHandlers[command[4]].CommandPoll(command[4],command[5:]))
+        elif command[1] == "HELP":
+            return command[0] + "|Network is currently running the following commands: " + str(",".join(self._commandHandlers.keys())) + ":" + str(",".join(self._childHandlers.keys()))
         elif command[1] in self._commandHandlers:
             #Modular Commands
             #directs the command to the handling module
@@ -118,8 +120,10 @@ class NodeGen():
             child = self.ReturnChildWithCommand(command[1])
             responseAddress = self._modules['Service'].GetThreadInfo(command[0])
 
-            return child.RetValues()["Thread"] + "|@RED|" + str(responseAddress[0]) + "|" + str(responseAddress[1]) + "|" + "|".join(command[1:])
-            #TODO handling of no existing command
+            if child == 0:
+                return command[0] + "|This command is not available on the network"
+            else:
+                return child.RetValues()["Thread"] + "|@RED|" + str(responseAddress[0]) + "|" + str(responseAddress[1]) + "|" + "|".join(command[1:])
 
 
     def AppendModules(self):
@@ -156,7 +160,11 @@ class NodeGen():
     def ReturnChildWithCommand(self,requestedCommand):
         #TODO modify this to handle case inwhich there is no child with this command - so probably spawn a new one?
         #TODO also this currently only contacts the first spawned child for a command
-        return self._childHandlers[requestedCommand][0]
+
+        if requestedCommand in self._childHandlers:
+            return self._childHandlers[requestedCommand][0]
+        else:
+            return 0
 
 
 
