@@ -3,6 +3,7 @@ import selectors
 
 class HeartbeatModule:
     def __init__(self):
+        self._validCommands = {}
         # Network components
         self._myOwnerIP = 0
         self._myOwnerPort = 0
@@ -35,3 +36,9 @@ class HeartbeatModule:
                 break
 
         return desiredPort
+
+    def ReturnCommands(self):
+        return list(self._validCommands.keys())
+
+    def CommandPoll(self,command,arguments):
+        return self._validCommands[command](arguments)

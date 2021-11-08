@@ -34,9 +34,9 @@ class ReadWrite (Thread):
             while self._running:
                 events = self._selector.select(timeout=1)
                 for key, mask in events:
-                    if mask & selectors.EVENT_READ:
+                    if mask & selectors.EVENT_READ: #Equivalent to mask == event read
                         self._read(key)
-                    if mask & selectors.EVENT_WRITE and not self._outgoing_buffer.empty():
+                    if mask & selectors.EVENT_WRITE and not self._outgoing_buffer.empty(): #Equivalent to mask == event write
                         self._write(key)
                 # Check for a socket being monitored to continue.
                 if not self._selector.get_map():
@@ -61,7 +61,9 @@ class ReadWrite (Thread):
             message = self._outgoing_buffer.get(False)
         except queue.Empty:
             message = None
-        if message:
+        if message == "#":
+            pass #Switches to read mode if the output message is the NOOP (#) command
+        elif message:
             print("\033[92m" + f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' \033[0m")
             sent = self._sock.send(message.encode())
 
@@ -73,3 +75,6 @@ class ReadWrite (Thread):
 
     def postMessage(self, message):
         self._outgoing_buffer.put(message)
+
+    def GetSocket(self): #get info of connected client
+        return self._sock.getpeername()

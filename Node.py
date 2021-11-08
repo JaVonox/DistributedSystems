@@ -1,6 +1,8 @@
 """
-Clients are redirected to their service node - data does *not* pass through the control node to external nodes.
-Use multiprocessing
+RESTRICTED VALUES
+| SEPERATOR
+@ ROUTER TO NON-MODULE FUNCTION
+# CALL TO SWITCH TO READ MODE
 """
 
 
@@ -14,6 +16,8 @@ import MODULEHeartbeat
 import MODULEEcho
 import MODULEDict
 import MODULESpawner
+
+from collections import defaultdict
 
 class NodeGen():
     def __init__(self,typeParam,parentIP,parentPort):
@@ -29,9 +33,18 @@ class NodeGen():
         self._parentPort = parentPort
         self._children = []
 
+        self._commandHandlers = {} #command : handler
+        self._childHandlers = defaultdict(list) #command : [List of children who can handle that command]
+
         self.AppendModules()
 
     def CreateServer(self,IP,attemptPrime): #Creates a thread listener
+
+        for x in self._modules.values(): #gets all module classes
+            for y in x.ReturnCommands():
+                self._commandHandlers[y] = x
+        #Service cannot exist when creating command handlers - it being a module messes things up
+
         #Prime *always* exists on 51321. Also must be control.
         if attemptPrime is False or self._modules['Heartbeat'].HeartbeatPort(IP,51321): #loads into nonprime location if node does not request prime or if a prime node exists
 
@@ -47,10 +60,9 @@ class NodeGen():
 
         self._modules['Service'].start()
 
-        if self._parentPort != 0 and self._parentIP != 0:
-            self._modules['Service'].ContactParent(self._parentIP,self._parentPort,self._nodeType) #Send contact info to parent
+        if self._parentPort != 0 and self._parentIP != 0: #Sends a contact request to the parent node
+            self._modules['Service'].ContactParent(self._parentIP,self._parentPort,self._nodeType,self._commandHandlers.keys()) #Send contact info to parent
 
-        self.LoopNode()
 
     def CreateClient(self): #Autoconnects to prime node
         if self._modules['Heartbeat'].HeartbeatPort("127.0.0.1",51321):
@@ -66,7 +78,6 @@ class NodeGen():
         else:
             print(f"Client: prime node does not exist. Client could not be initialised")
 
-
     def LoopNode(self): #Initiates infinite loop to repeat actions
         while True:
             if len(self._modules['Service'].readCommands) > 0: #If command exists in read commands buffer
@@ -81,44 +92,52 @@ class NodeGen():
         command = input.split("|") #Sender ID,Command,Message
 
         #Standard should be:
-        #Route|Command|Arguments
+        #RouteThread|Command|Argument1|Argument2 etc.
 
-        if command[1] == "MODULES":
-            return command[0] + "|" + str(self._modules.keys())
-        elif command[1] == "ECHO" and self._modules.__contains__('Echo'): #checks for command type and if the node has the required module
-            return command[0] + "|" + self._modules['Echo'].RequestEcho(command[2]) #return value provided by echo module
-        elif command[1] == "ECHODUMP" and self._modules.__contains__('Echo'): #TODO Change this to fit standard
-            return command[0] + "|" + self._modules['Echo'].DumpEcho()  # return all echos
-        elif command[1] == "CREATE" and self._modules.__contains__('NodeSpawn'): #TODO rework this to take in CREATE types. also allow nodes to decide to create nCodes themselves
-            #TODO check for failure?
-            print(command[2])
-            self._modules['NodeSpawn'].NodeSpawnParse(command[2],self._IP,self._connectedPort) #Spawn node that user requests.
-            #TODO make server handle the node spawning
-            return command[0] + "|New Node Generated"
-        elif command[1] == "DICTADD" and self._modules.__contains__('Dict'): #TODO Change this to fit standard
-            self._modules['Dict'].AddToDict(command[2],command[3])  # Add parameter and key to dictionary
-            return command[0] + "|Added value to dictionary"
-        elif command[1] == "DICT" and self._modules.__contains__('Dict'):
-            return command[0] + "|" + self._modules['Dict'].Define(command[2])  # returns value of key
-        elif command[1] == "REG":
-            self._children.append(NodeChild(command[2],command[3],command[4]))
-            print(self._children[0].retValues())
-            return command[0] + "|ACK" #TODO this creates an infinite loop. But more importantly, the server to server communications happen on a seperate port... is this correct?
+        #TODO remove ability for client to send @ manually?
+        if command[1][0] == "@":
+            # Builtin Commands (start with @)
+            if command[1] == "@REG":
+                newChild = NodeChild(command[2],command[3],command[4],command[0])
+                self._children.append(newChild)
+                self.AddChildCommands(newChild,command[5:]) #add the commands the child can do to a list of commands that a child can process
+                return command[0] + "|@ACK"
+            elif command[1] == "@ACK":
+                return command[0] + "|#" #NOOP command
+            elif command[1] == "@RED": #This command is sent to a child and tells them to create a new connection with the specified IP/PORT, then send the results of an operation
+                #TODO May need reworking?
+                #Sends message to client with response data
+                self._modules['Service'].ContactNew(str(command[2]),int(command[3]),self._commandHandlers[command[4]].CommandPoll(command[4],command[5:]))
+
+        elif command[1] in self._commandHandlers:
+            #Modular Commands
+            #directs the command to the handling module
+            return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:])
         else:
-            return command[0] + "|Unknown command or module does not exist on this node"
+            #search for child who can process requested command
+            child = self.ReturnChildWithCommand(command[1])
+            responseAddress = self._modules['Service'].GetThreadInfo(command[0])
+
+            return child.RetValues()["Thread"] + "|@RED|" + str(responseAddress[0]) + "|" + str(responseAddress[1]) + "|" + "|".join(command[1:])
+            #TODO handling of no existing command
 
 
-    def AppendModules(self): #TODO so far the modules all run on control node, instead of control node making new nodes with modules. change this.
+    def AppendModules(self):
         self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule()
 
         connectionIP = ("127.0.0.1" if self._parentIP == 0 else str(self._parentIP))
 
         if self._nodeType == "Control":
-            self._modules['Echo'] = MODULEEcho.EchoModule()
+
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
+
+            self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(connectionIP,True)
+
+            self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
             self.CreateClient()
+            pass
         elif self._nodeType == "Echo":
             self._modules['Echo'] = MODULEEcho.EchoModule()
             self.CreateServer(connectionIP,False)
@@ -126,21 +145,38 @@ class NodeGen():
             self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(connectionIP,False)
 
+        self.LoopNode()
+
+    def AddChildCommands(self,child,commandsList): #Creates a dictionary of commands and which children can process said commands
+        for x in commandsList:
+            self._childHandlers[x].append(child)
+
+
+
+    def ReturnChildWithCommand(self,requestedCommand):
+        #TODO modify this to handle case inwhich there is no child with this command - so probably spawn a new one?
+        #TODO also this currently only contacts the first spawned child for a command
+        return self._childHandlers[requestedCommand][0]
+
+
+
 
 class NodeChild():
-    def __init__(self,nodeTypeArg,IPArg,PortArg):
+    def __init__(self,nodeTypeArg,IPArg,PortArg,threadNum):
         self._nodeType = nodeTypeArg
         self._IP = IPArg
         self._port = PortArg
+        self._threadNum = threadNum
 
-    def retValues(self):
-        return (self._nodeType,self._IP,self._port)
+    def RetValues(self):
+        return {"Type" : self._nodeType, "IP" : self._IP, "Port" : self._port, "Thread" : self._threadNum}
+
+    def RetType(self):
+        return self._nodeType
 
 
 parentIP = 0
 parentPort = 0
-
-# print(sys.argv)
 
 if len(sys.argv) > 1:
     nodeRequest = sys.argv[1] #argument 1 defines the node type

@@ -72,14 +72,17 @@ class ThreadHandler (Thread):
         commandsToKill = []
 
         for x in self.writeCommands: #commands are already routed to their handler at this stage therefore we just need to post them
-            connectionLoader = x.split("|")
-            self._threads[int(connectionLoader[0])].postMessage(connectionLoader[1])
-            commandsToKill.append(self.writeCommands.index(x))
+            if x is None: #Case of no response required
+                break
+            else:
+                connectionLoader = x.split("|")
+                self._threads[int(connectionLoader[0])].postMessage("|".join(connectionLoader[1:]))
+                commandsToKill.append(self.writeCommands.index(x))
 
         for z in commandsToKill: #clear all processed commands
             del self.writeCommands[int(z)]
 
-    def ContactParent(self,parentIP,parentPort,nodeType):
+    def ContactParent(self,parentIP,parentPort,nodeType,commands):
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #sockVar.setblocking(False)
         sockVar.connect((parentIP,parentPort))
@@ -89,4 +92,24 @@ class ThreadHandler (Thread):
         self._threads[self._threadNamer] = module
         self._threadNamer = self._threadNamer + 1
         module.start()
-        module.postMessage("REG|" + nodeType + "|" + str(self._host) + "|" + str(self._port))
+        message = "@REG|" + nodeType + "|" + str(self._host) + "|" + str(self._port)
+
+        for x in commands: #Append list of any commands this node can handle, for routing later.
+            message += "|" + x
+
+        module.postMessage(message) #Tell parent what IP and Port this node exists on
+        #TODO maybe close connection?
+
+    def ContactNew(self,newIP,newPort,message):
+        sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockVar.connect((newIP,newPort))
+
+        module = ReadWrite.ReadWrite(sockVar, (newIP,newPort), self._port, self._host, self._threadNamer)
+        self._threads[self._threadNamer] = module
+        self._threadNamer = self._threadNamer + 1
+        module.start()
+
+        module.postMessage(message) #Tell parent what IP and Port this node exists on
+
+    def GetThreadInfo(self,threadID): #Return the IP and Port of a specified ReadWrite Thread
+        return self._threads[int(threadID)].GetSocket()
