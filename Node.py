@@ -132,12 +132,8 @@ class NodeGen():
         connectionIP = ("127.0.0.1" if self._parentIP == 0 else str(self._parentIP))
 
         if self._nodeType == "Control":
-
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
-
-            self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(connectionIP,True)
-
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
             self.CreateClient()
@@ -153,7 +149,8 @@ class NodeGen():
 
     def AddChildCommands(self,child,commandsList): #Creates a dictionary of commands and which children can process said commands
         for x in commandsList:
-            self._childHandlers[x].append(child)
+            child.AddCommand(x)
+            self._childHandlers[x].append(child) #creates a list of the different nodes that can handle requests
 
 
 
@@ -174,13 +171,20 @@ class NodeChild():
         self._nodeType = nodeTypeArg
         self._IP = IPArg
         self._port = PortArg
-        self._threadNum = threadNum
+        self._threadNum = threadNum #Thread that handles interactions
+        self._commands = []
 
     def RetValues(self):
         return {"Type" : self._nodeType, "IP" : self._IP, "Port" : self._port, "Thread" : self._threadNum}
 
     def RetType(self):
         return self._nodeType
+
+    def AddCommand(self,commandName):
+        self._commands.append(commandName)
+
+    def ListCommands(self):
+        return self._commands
 
 
 parentIP = 0

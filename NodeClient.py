@@ -12,7 +12,7 @@ class NodeClient (Thread):
         # Network components
         self._host = host
         self._port = port
-        self._listening_socket = None
+        self._listener = None
         self._sock = None
         self._selector = selectors.DefaultSelector()
         self._name = name
@@ -43,7 +43,8 @@ class NodeClient (Thread):
         self._running = False
 
     def run(self):
-        self._configureServer()
+        self._listener = NodeClientListener(self._ownIP,self._ownPort)
+        self._listener.start()
         print("Command Syntax: COMMAND|PARAMS")
         try:
             while self._running:
@@ -79,16 +80,57 @@ class NodeClient (Thread):
             print(f"Client({self._ownIP},{self._ownPort}): sent message '{message}'")
             sent = self._sock.send(message.encode())
 
+    def postMessage(self, message):
+        self._outgoing_buffer.put(message)
+
+class NodeClientListener(Thread):
+    def __init__(self, listeningIP, listeningPort):
+        Thread.__init__(self)
+        # Network components
+        self._IP = listeningIP
+        self._Port = listeningPort
+        self._listening_socket = None
+        self._selector = selectors.DefaultSelector()
+
+        # Processing Components
+        self._threads = {} #Dictionary of threads, threadname : thread
+        self._threadNamer = 0 #Determines int name for thread. Does not equal the number of running threads
+
     def _configureServer(self):
         self._listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Avoid bind() exception: OSError: [Errno 48] Address already in use
         self._listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._listening_socket.bind((self._ownIP, self._ownPort))
+        self._listening_socket.bind((self._IP, self._Port))
         self._listening_socket.listen()
 
-        print(f"Client({self._ownIP},{self._ownPort}): listening on", (self._ownIP, self._ownPort))
-        # self._listening_socket.setblocking(False)
+        print(f"Client({self._IP},{self._Port}): listening on", (self._IP, self._Port))
+        self._listening_socket.setblocking(False)
         self._selector.register(self._listening_socket, selectors.EVENT_READ, data=None)
 
-    def postMessage(self, message):
-        self._outgoing_buffer.put(message)
+    def accept_wrapper(self, sock):
+        conn, addr = sock.accept()  # Should be ready to read
+        print(f"Client({self._IP},{self._Port}): accepted connection from", addr)
+
+        conn.setblocking(False)
+
+        module = None
+        module = ReadWrite.ReadWrite(conn, addr, self._Port, self._IP, self._threadNamer)
+        self._threads[self._threadNamer] = module
+        self._threadNamer = self._threadNamer + 1
+        module.start()
+
+    def run(self):
+        self._configureServer()
+        try:
+            while True:
+                events = self._selector.select(timeout=0.01) #loop every second
+
+                for key, mask in events:
+                    if key.data is None:
+                        self.accept_wrapper(key.fileobj) #add new connection to modules
+                    else:
+                       pass
+        except KeyboardInterrupt:
+            print(f"Client({self._IP},{self._Port}): caught keyboard interrupt, exiting")
+        finally:
+            self._selector.close()
