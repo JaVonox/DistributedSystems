@@ -8,7 +8,10 @@ class DictModule:
         return "Added value to dictionary"
 
     def Define(self, arguments): #COMMAND DICT|Key
-        return self._dict[arguments[0]]
+        if arguments[0] in self._dict.keys():
+            return self._dict[arguments[0]]
+        else:
+            return "NULL"
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())

@@ -50,11 +50,12 @@ class ReadWrite (Thread):
             self._selector.close()
 
     def _read(self, key):
-        recv_data = self._sock.recv(1024).decode()
-        if recv_data:
+        packageLen = self._sock.recv(10).decode() #Get first 10 characters - defines how long the next part of the packet will be
+        if packageLen:
+            recv_data = self._sock.recv(int(packageLen)).decode()
             print(f"{self._peerNodeType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
             self._readBuffer.append(recv_data) #adds read data into the read buffer
-        if not recv_data:
+        if not packageLen:
             print(f"{self._myNodeType}({self._myIP},{self._myPort})RWT{self.myName}: closing connection on " , repr(key.fileobj.getpeername()))
             self._selector.unregister(self._sock)
             self._sock.close()
@@ -67,8 +68,14 @@ class ReadWrite (Thread):
         if message == "#":
             pass #Switches to read mode if the output message is the NOOP (#) command
         elif message:
+            #Message is sent with readsize
+
+            packetHeader = str(len(message))  # header SMTP defines the response as a server SMTP response as well as the message length
+            packetHeaderPadded = f"{packetHeader:<10}"
+            packet = packetHeaderPadded + message
+
+            self._sock.send(packet.encode())
             print(f"{self._myNodeType}({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' to {self._peerNodeType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
-            sent = self._sock.send(message.encode())
 
     def OffloadCommands(self): #return all stored reads and clear the buffer
         commands = []

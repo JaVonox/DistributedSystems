@@ -3,6 +3,7 @@ RESTRICTED VALUES
 | SEPERATOR
 @ ROUTER TO NON-MODULE FUNCTION
 # CALL TO SWITCH TO READ MODE
+? NEWLINE
 """
 
 import ThreadHandler
@@ -111,32 +112,30 @@ class NodeGen():
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @)
 
-            if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT RGE RESPONSE
+            if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT REP RESPONSE
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
                 self._modules['Service'].DefineThreadNodeType(command[0],command[2])
                 self._knownNodes[command[0]] = newNode
                 self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
 
                 #Formats a response to the node to tell it to identify itself
-                message = command[0] + "|@RGE|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort)
+                message = command[0] + "|@REP|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort)
                 for x in self._commandHandlers.keys():  # Append list of any commands this node can handle, for routing later.
                     message += "|" + x
                 return message
 
-            elif command[1] == "@RGE": #RESPOND TO REGISTER COMMAND - EXPECT ACK RESPONSE
+            elif command[1] == "@REP": #RESPOND TO REGISTER COMMAND - EXPECT NO RESPONSE
                 newNode = ExtNode(command[2], command[3], command[4], command[0])
                 self._modules['Service'].DefineThreadNodeType(command[0], command[2])
                 self._knownNodes[command[0]] = newNode
                 self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
 
-                return command[0] + "|@ACK"
+                return command[0] + "|#"
 
-            elif command[1] == "@ACK":
-                return command[0] + "|#" #NOOP command
-
-            elif command[1] == "@RED": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
-                newThreadID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG")
-                return str(newThreadID) + "|" + self._commandHandlers[command[4]].CommandPoll(command[4],command[5:])
+            elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
+                print(self._commandHandlers.keys())
+                newThreadID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                return self.CommandParser(str(newThreadID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
         elif self._nodeType == "Client": #Clients only service @ commands, and will provide no automated response to anything but @ commands
             return command[0] + "|#" #NOOP command
@@ -161,7 +160,7 @@ class NodeGen():
                 return command[0] + "|This command is not available on the network"
             else:
                 #Thread that runs the handler + listening ports of requester + initial request of user
-                return foundNode.RetValues()["Thread"] + "|@RED|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+                return foundNode.RetValues()["Thread"] + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
 
     def AppendModules(self):
         self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule(self._nodeType)

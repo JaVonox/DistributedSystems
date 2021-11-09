@@ -71,20 +71,18 @@ class ThreadHandler (Thread):
                 self.readCommands.append(str(self._threads[x].myName) + "|" + y)
 
     def WriteToBuffer(self):
-        commandsToKill = []
+        commandsCopy = self.writeCommands.copy()
 
-        for x in self.writeCommands: #commands are already routed to their handler at this stage therefore we just need to post them
+        for x in commandsCopy: #commands are already routed to their handler at this stage therefore we just need to post them
             if x is None: #Case of no response required
                 break
             else:
                 connectionLoader = x.split("|")
                 self._threads[int(connectionLoader[0])].postMessage("|".join(connectionLoader[1:]))
-                commandsToKill.append(self.writeCommands.index(x))
+                del self.writeCommands[self.writeCommands.index(x)]
 
-        for z in commandsToKill: #clear all processed commands
-            del self.writeCommands[int(z)]
 
-    def ContactNode(self,ConNodeIP,ConNodePort,commands,messageType): #For node to node. messageType = @REG, @RGE etc.
+    def ContactNode(self,ConNodeIP,ConNodePort,commands,messageType): #For node to node. messageType = @REG, @REP etc.
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((ConNodeIP,ConNodePort))
         sockVar.setblocking(False)
