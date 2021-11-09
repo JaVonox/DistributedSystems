@@ -2,8 +2,9 @@ import socket
 import selectors
 
 class HeartbeatModule:
-    def __init__(self):
+    def __init__(self,Type):
         self._validCommands = {}
+        self._myOwnerType = Type
         # Network components
         self._myOwnerIP = 0
         self._myOwnerPort = 0
@@ -19,10 +20,10 @@ class HeartbeatModule:
         heartbeatSock.close()
 
         if heartbeatResult == 0:  # if the server on this port exists
-            print(f"Server({self._myOwnerIP},{self._myOwnerPort})HB: heartbeat to ({IP},{Port}) succeeded") #TODO fix to be either server or client
+            print(f"{self._myOwnerType}({self._myOwnerIP},{self._myOwnerPort}): heartbeat to ({IP},{Port}) succeeded") #TODO fix to be either server or client
             return True
         else:
-            print(f"Server({self._myOwnerIP},{self._myOwnerPort})HB: heartbeat to ({IP},{Port}) failed")
+            print(f"{self._myOwnerType}({self._myOwnerIP},{self._myOwnerPort}): heartbeat to ({IP},{Port}) failed")
             return False
 
 

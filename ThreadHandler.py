@@ -5,12 +5,12 @@ from threading import Thread
 import ReadWrite
 
 class ThreadHandler (Thread):
-    def __init__(self,sType, host="127.0.0.1", port=12345):
+    def __init__(self,sType, host, port):
         Thread.__init__(self)
         # Network components
         self._host = host
         self._port = port
-        self._serverType = sType
+        self._type = sType
         self._listening_socket = None
         self._selector = selectors.DefaultSelector()
 
@@ -21,6 +21,9 @@ class ThreadHandler (Thread):
         self.readCommands = [] #SENDERTHREAD|SERVICE|MESSAGE
         self.writeCommands = [] #SENDERTHREAD|SERVICE|MESSAGE
 
+    def DefineThreadNodeType(self,threadNum,input):
+        self._threads[int(threadNum)].DefinePeerType(input)
+
     def _configureServer(self):
         self._listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Avoid bind() exception: OSError: [Errno 48] Address already in use
@@ -28,18 +31,17 @@ class ThreadHandler (Thread):
         self._listening_socket.bind((self._host, self._port))
         self._listening_socket.listen()
 
-        print(f"Server({self._host},{self._port}): listening on", (self._host, self._port))
+        print(f"{self._type}({self._host},{self._port}): listening on", (self._host, self._port))
         self._listening_socket.setblocking(False)
         self._selector.register(self._listening_socket, selectors.EVENT_READ, data=None)
 
     def accept_wrapper(self, sock):
         conn, addr = sock.accept()  # Should be ready to read
-        print(f"Server({self._host},{self._port}): accepted connection from", addr)
 
         conn.setblocking(False)
 
         module = None
-        module = ReadWrite.ReadWrite(conn, addr, self._port, self._host, self._threadNamer)
+        module = ReadWrite.ReadWrite(conn, addr, self._port, self._host, self._threadNamer,self._type)
         self._threads[self._threadNamer] = module
         self._threadNamer = self._threadNamer + 1
         module.start()
@@ -58,7 +60,7 @@ class ThreadHandler (Thread):
                     else:
                        pass
         except KeyboardInterrupt:
-            print(f"Server({self._host},{self._port}): caught keyboard interrupt, exiting")
+            print(f"{self._type}({self._host},{self._port}): caught keyboard interrupt, exiting")
         finally:
             self._selector.close()
 
@@ -82,34 +84,23 @@ class ThreadHandler (Thread):
         for z in commandsToKill: #clear all processed commands
             del self.writeCommands[int(z)]
 
-    def ContactNode(self,parentIP,parentPort,nodeType,commands,messageType): #For node to node. messageType = @REG, @RGE etc.
+    def ContactNode(self,ConNodeIP,ConNodePort,commands,messageType): #For node to node. messageType = @REG, @RGE etc.
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockVar.connect((parentIP,parentPort))
+        sockVar.connect((ConNodeIP,ConNodePort))
         sockVar.setblocking(False)
 
-        module = ReadWrite.ReadWrite(sockVar, (parentIP,parentPort), self._port, self._host, self._threadNamer)
-        self._threads[self._threadNamer] = module
+        module = ReadWrite.ReadWrite(sockVar, (ConNodeIP,ConNodePort), self._port, self._host, self._threadNamer,self._type)
+        newThreadName = self._threadNamer
+        self._threads[newThreadName] = module
         self._threadNamer = self._threadNamer + 1
         module.start()
-        message = messageType + "|" + nodeType + "|" + str(self._host) + "|" + str(self._port)
+        message = messageType + "|" + str(self._type) + "|" + str(self._host) + "|" + str(self._port)
 
         for x in commands: #Append list of any commands this node can handle, for routing later.
             message += "|" + x
 
         module.postMessage(message) #Tell parent what IP and Port this node exists on
-
-
-    def Contact(self,newIP,newPort,message): #For clients
-        sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockVar.connect((newIP,newPort))
-        sockVar.setblocking(False)
-
-        module = ReadWrite.ReadWrite(sockVar, (newIP,newPort), self._port, self._host, self._threadNamer)
-        self._threads[self._threadNamer] = module
-        self._threadNamer = self._threadNamer + 1
-        module.start()
-
-        module.postMessage(message) #Attempt to send message to client on listening socket
+        return newThreadName #Return the thread that has been created
 
     def GetThreadInfo(self,threadID): #Return the IP and Port of a specified ReadWrite Thread
         return self._threads[int(threadID)].GetSocket()

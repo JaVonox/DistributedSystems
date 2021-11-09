@@ -5,12 +5,13 @@ from threading import Thread
 import types
 
 class ReadWrite (Thread):
-    def __init__(self, sock, addr, myPort, myIP, myName):
+    def __init__(self, sock, addr, myPort, myIP, myName, myNodeType):
         Thread.__init__(self)
         # Network components
-        self._listening_socket = None
         self._sock = sock
         self._addr = addr
+        self._myNodeType = myNodeType
+        self._peerNodeType = "Node"
 
         self._myIP = myIP
         self._myPort = myPort
@@ -27,6 +28,9 @@ class ReadWrite (Thread):
 
     def kill_connection(self):
         self._running = False
+
+    def DefinePeerType(self,type):
+        self._peerNodeType = type
 
     def run(self):
         try:
@@ -48,10 +52,10 @@ class ReadWrite (Thread):
     def _read(self, key):
         recv_data = self._sock.recv(1024).decode()
         if recv_data:
-            print(f"Client({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
+            print(f"{self._peerNodeType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
             self._readBuffer.append(recv_data) #adds read data into the read buffer
         if not recv_data:
-            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: closing connection on " , repr(key.fileobj.getpeername()))
+            print(f"{self._myNodeType}({self._myIP},{self._myPort})RWT{self.myName}: closing connection on " , repr(key.fileobj.getpeername()))
             self._selector.unregister(self._sock)
             self._sock.close()
 
@@ -63,7 +67,7 @@ class ReadWrite (Thread):
         if message == "#":
             pass #Switches to read mode if the output message is the NOOP (#) command
         elif message:
-            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' to ({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
+            print(f"{self._myNodeType}({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' to {self._peerNodeType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
             sent = self._sock.send(message.encode())
 
     def OffloadCommands(self): #return all stored reads and clear the buffer
