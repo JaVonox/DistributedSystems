@@ -33,6 +33,7 @@ class NodeGen():
         self._parentPort = parentPort
         self._children = []
 
+        self._myCommands = [] # available commands
         self._commandHandlers = {} #command : handler
         self._childHandlers = defaultdict(list) #command : [List of children who can handle that command]
 
@@ -61,7 +62,7 @@ class NodeGen():
         self._modules['Service'].start()
 
         if self._parentPort != 0 and self._parentIP != 0: #Sends a contact request to the parent node
-            self._modules['Service'].ContactParent(self._parentIP,self._parentPort,self._nodeType,self._commandHandlers.keys()) #Send contact info to parent
+            self._modules['Service'].ContactNode(self._parentIP,self._parentPort,self._nodeType,self._commandHandlers.keys(),"@REG") #Send contact info to parent
 
 
     def CreateClient(self): #Autoconnects to prime node
@@ -98,7 +99,13 @@ class NodeGen():
         #TODO remove ability for client to send @ manually?
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @)
-            if command[1] == "@REG":
+            if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT RGE RESPONSE
+                newChild = NodeChild(command[2],command[3],command[4],command[0])
+                self._children.append(newChild)
+                self.AddChildCommands(newChild,command[5:]) #add the commands the child can do to a list of commands that a child can process
+                self._modules['Service'].ContactNode(command[3], int(command[4]), self._nodeType,self._commandHandlers.keys(),"@RGE")  # Send contact info to parent
+                return command[0] + "|#" #NOOP because response is already handled
+            elif command[1] == "@RGE": #RESPOND TO REGISTER COMMAND - EXPECT ACK RESPONSE
                 newChild = NodeChild(command[2],command[3],command[4],command[0])
                 self._children.append(newChild)
                 self.AddChildCommands(newChild,command[5:]) #add the commands the child can do to a list of commands that a child can process
@@ -149,8 +156,7 @@ class NodeGen():
 
     def AddChildCommands(self,child,commandsList): #Creates a dictionary of commands and which children can process said commands
         for x in commandsList:
-            child.AddCommand(x)
-            self._childHandlers[x].append(child) #creates a list of the different nodes that can handle requests
+            self._childHandlers[x].append(child)
 
 
 
@@ -182,9 +188,6 @@ class NodeChild():
 
     def AddCommand(self,commandName):
         self._commands.append(commandName)
-
-    def ListCommands(self):
-        return self._commands
 
 
 parentIP = 0

@@ -63,7 +63,7 @@ class ReadWrite (Thread):
         if message == "#":
             pass #Switches to read mode if the output message is the NOOP (#) command
         elif message:
-            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}'")
+            print(f"Server({self._myIP},{self._myPort})RWT{self.myName}: sent message '{message}' to ({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
             sent = self._sock.send(message.encode())
 
     def OffloadCommands(self): #return all stored reads and clear the buffer

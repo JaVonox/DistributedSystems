@@ -83,6 +83,10 @@ class NodeClient (Thread):
     def postMessage(self, message):
         self._outgoing_buffer.put(message)
 
+    def RouteMessage(self,message):
+        #TODO set this up to route based on known connections
+        pass
+
 class NodeClientListener(Thread):
     def __init__(self, listeningIP, listeningPort):
         Thread.__init__(self)

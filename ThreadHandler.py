@@ -82,7 +82,7 @@ class ThreadHandler (Thread):
         for z in commandsToKill: #clear all processed commands
             del self.writeCommands[int(z)]
 
-    def ContactParent(self,parentIP,parentPort,nodeType,commands): #For parents
+    def ContactNode(self,parentIP,parentPort,nodeType,commands,messageType): #For node to node. messageType = @REG, @RGE etc.
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((parentIP,parentPort))
         sockVar.setblocking(False)
@@ -91,12 +91,13 @@ class ThreadHandler (Thread):
         self._threads[self._threadNamer] = module
         self._threadNamer = self._threadNamer + 1
         module.start()
-        message = "@REG|" + nodeType + "|" + str(self._host) + "|" + str(self._port)
+        message = messageType + "|" + nodeType + "|" + str(self._host) + "|" + str(self._port)
 
         for x in commands: #Append list of any commands this node can handle, for routing later.
             message += "|" + x
 
         module.postMessage(message) #Tell parent what IP and Port this node exists on
+
 
     def Contact(self,newIP,newPort,message): #For clients
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
