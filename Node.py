@@ -10,6 +10,7 @@ import ThreadHandler
 
 import sys
 import time
+import socket
 
 #Modules
 import MODULEHeartbeat
@@ -21,12 +22,11 @@ from threading import Thread
 from collections import defaultdict
 
 class NodeGen():
-    def __init__(self,typeParam,parentIP,parentPort):
+    def __init__(self,typeParam,parentIP,parentPort,existingIPs):
         self._connectedPort = 0
-        self._IP = "127.0.0.1" #TODO modify to allow different IPs
+        self._IP = socket.gethostbyname(socket.gethostname())
         self._nodeType = typeParam
 
-        self._isPrime = False #first server becomes the prime
         self.encodeFormat = "utf-8"
         self._modules = {}
 
@@ -37,27 +37,29 @@ class NodeGen():
         self._commandHandlers = {} #command : handler (Self commands)
         self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command]
 
+        self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 51321 is the prime node.
+
         self.AppendModules()
 
-    def CreateServer(self,IP,attemptPrime): #Creates a thread listener
+    def CreateServer(self,IP,attemptBase): #Creates a thread listener
 
-        for x in self._modules.values(): #gets all module classes
+        for x in self._modules.values(): #gets all module classes that can exist
             for y in x.ReturnCommands():
                 self._commandHandlers[y] = x
         #Service cannot exist when creating command handlers - it being a module messes things up
 
-        #Prime *always* exists on 51321. Also must be control.
-        if attemptPrime is False or self._modules['Heartbeat'].HeartbeatPort(IP,51321): #loads into nonprime location if node does not request prime or if a prime node exists
+        #On 51321 a control node must exist
+
+        if attemptBase is False or self._modules['Heartbeat'].HeartbeatPort(IP,51321): #loads into nonprime location if node does not request prime or if a prime node exists
 
             self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 51322)) #Iterates and returns next available port on specified IP
             self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType, self._IP, self._connectedPort)
-            print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on non-prime location ({self._IP}, {self._connectedPort})")
 
-        elif attemptPrime is True:
+        elif attemptBase is True:
             self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType,IP, 51321)
             self._connectedPort = 51321
-            self._isPrime = True
-            print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on prime location ({self._IP}, {self._connectedPort})")
+
+        print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on ({self._IP}, {self._connectedPort})")
 
         self._modules['Service'].start()
 
@@ -65,36 +67,39 @@ class NodeGen():
             self._modules['Service'].ContactNode(self._parentIP,self._parentPort,self._commandHandlers.keys(),"@REG") #Send contact info to parent
 
 
-    def CreateClient(self,IP): #Autoconnects to prime node
-        if self._modules['Heartbeat'].HeartbeatPort("127.0.0.1",51321): #Set up client listening port
-            self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 41322)) #Iterates and returns next available port on specified IP
-            self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
-            self._modules['Service'].start()
 
-            print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on non-prime location ({self._IP}, {self._connectedPort})")
 
-            print("Command Syntax: COMMAND|PARAMS")
+    def CreateClient(self): #Autoconnects to prime node
 
-            self._modules['Service'].ContactNode(IP,51321,["NA"],"@REG")
-            self._modules['InputReader'] = ClientInputReader() #Starts thread to handle client entering data
-            self._modules['InputReader'].start()
+        for IP in self._IPList: #loop through all IPs to find the first that exists
 
-            while True:
-                if self._modules['InputReader'].ReadFlag(): #If a client has submitted a request
-                    tmpInputs = self._modules['InputReader'].ReadRequest()
-                    for x in tmpInputs: #append all submitted inputs
-                        commands = x.split("|") #Gets the first command
-                        route = self.ReturnNodeHandler(commands[0])
+            if self._modules['Heartbeat'].HeartbeatPort(IP,51321): #Set up client listening port
+                self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 41322)) #Iterates and returns next available port on specified IP
+                self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
+                self._modules['Service'].start()
 
-                        if route == "#":
-                            self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
-                        else:
-                            self._modules['Service'].writeCommands.append(str(route.RetValues()['Thread']) + "|" + x)  # routed node
-                else:
-                    self.LoopNode()
+                print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on non-prime location ({self._IP}, {self._connectedPort})")
+                print("Command Syntax: COMMAND|PARAMS")
 
-        else:
-            print(f"{self._nodeType}: prime node does not exist. Client could not be initialised")
+                self._modules['Service'].ContactNode(IP,51321,["NA"],"@REG")
+                self._modules['InputReader'] = ClientInputReader() #Starts thread to handle client entering data
+                self._modules['InputReader'].start()
+
+                while True:
+                    if self._modules['InputReader'].ReadFlag(): #If a client has submitted a request
+                        tmpInputs = self._modules['InputReader'].ReadRequest()
+                        for x in tmpInputs: #append all submitted inputs
+                            commands = x.split("|") #Gets the first command
+                            route = self.ReturnNodeHandler(commands[0])
+
+                            if route == "#":
+                                self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
+                            else:
+                                self._modules['Service'].writeCommands.append(str(route.RetValues()['Thread']) + "|" + x)  # routed node
+                    else:
+                        self.LoopNode()
+
+        print(f"{self._nodeType}: control node on 51321 does not exist. Client could not be initialised")
 
     def LoopNode(self): #Initiates infinite loop to repeat actions
         if len(self._modules['Service'].readCommands) > 0: #If command exists in read commands buffer
@@ -166,26 +171,26 @@ class NodeGen():
     def AppendModules(self):
         self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule(self._nodeType)
 
-        connectionIP = ("127.0.0.1" if self._parentIP == 0 else str(self._parentIP))
-
         if self._nodeType == "Control":
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
-            self.CreateServer(connectionIP,True)
+            self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
-            self.CreateClient(connectionIP)
-            pass
+            self.CreateClient()
         elif self._nodeType == "Echo":
             self._modules['Echo'] = MODULEEcho.EchoModule()
-            self.CreateServer(connectionIP,False)
+            self.CreateServer(self._IP,False)
         elif self._nodeType == "Dictionary":
             self._modules['Dict'] = MODULEDict.DictModule()
-            self.CreateServer(connectionIP,False)
+            self.CreateServer(self._IP,False)
         else:
-            pass #TODO make this stop running if invalid input
+            print("Invalid node type")
+            input("Press any key to continue... ")
+            exit()
 
         while True:
-            self.LoopNode() #This is passed by the client, which has its own built in loopnode
+            self.LoopNode() #This is not accessed by the client, which has its own built in loopnode
+
 
     def DictCommand(self,child,commandsList): #Creates a dictionary of commands and which known nodes can process said commands
         for x in commandsList:
@@ -237,6 +242,23 @@ class ClientInputReader(Thread):
             self._requests.append(input(""))
             self._requestFlag = True
 
+
+def GetConnections():
+    #On file is a list of valid IPs. This contains all the IPs the server deems "available" for connection
+    #On these IPs a control node should be running at the port 51321 - the prime
+    #TODO add listening node functionality
+    #A control node can spawn up new nodes on each IP
+    #TODO add this too
+
+    #the client will always try to connect to the first in list on port 51321
+    #the server will spawn up a node on 127.0.0.1 regardless of what is on the list
+    #the file solely points to which IPs a listener might exist on - if a listener exists on 51321 and is contacted it will spawn up a new node of the requested type
+    #This node will then find a port (starting at 51322) and then contact its creator and register itself. The listener should still run on 51321 to expect connections
+
+    f = open("_ConnectionList.txt", "r")
+    ValidIPs = f.readlines()
+    return ValidIPs
+
 parentIP = 0
 parentPort = 0
 
@@ -245,7 +267,6 @@ if len(sys.argv) > 1:
     parentIP = sys.argv[2]
     parentPort = int(sys.argv[3])
 else:
-    nodeRequest = input("Create node:")
+    nodeRequest = input("Create node: ")
 
-
-NodeGen(nodeRequest,parentIP,parentPort) #spawns up new node of specified type
+NodeGen(nodeRequest,parentIP,parentPort,GetConnections()) #spawns up new node of specified type
