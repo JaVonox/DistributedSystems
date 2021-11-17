@@ -114,7 +114,7 @@ class NodeGen():
 
             if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT REP RESPONSE
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
-                self._modules['Service'].DefineThreadNodeType(command[0],command[2])
+                self._modules['Service'].DefineType(command[0],command[2])
                 self._knownNodes[command[0]] = newNode
                 self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
 
@@ -126,7 +126,7 @@ class NodeGen():
 
             elif command[1] == "@REP": #RESPOND TO REGISTER COMMAND - EXPECT NO RESPONSE
                 newNode = ExtNode(command[2], command[3], command[4], command[0])
-                self._modules['Service'].DefineThreadNodeType(command[0], command[2])
+                self._modules['Service'].DefineType(command[0], command[2])
                 self._knownNodes[command[0]] = newNode
                 self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
 
@@ -180,6 +180,8 @@ class NodeGen():
         elif self._nodeType == "Dictionary":
             self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(connectionIP,False)
+        else:
+            pass #TODO make this stop running if invalid input
 
         while True:
             self.LoopNode()
