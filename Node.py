@@ -9,6 +9,7 @@ RESTRICTED VALUES
 import ThreadHandler
 
 import sys
+import time
 
 #Modules
 import MODULEHeartbeat
@@ -99,6 +100,7 @@ class NodeGen():
         if len(self._modules['Service'].readCommands) > 0: #If command exists in read commands buffer
             self._modules['Service'].writeCommands.append(self.CommandParser(self._modules['Service'].readCommands[0])) #Interpret command and return result
             del self._modules['Service'].readCommands[0]
+        time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
 
@@ -108,6 +110,7 @@ class NodeGen():
         #Standard should be:
         #RouteThread|Command|Argument1|Argument2 etc.
 
+        #TODO invalid number of arguments breaks things
         #TODO remove ability for client to send @ manually?
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @)
@@ -133,9 +136,8 @@ class NodeGen():
                 return command[0] + "|#"
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
-                print(self._commandHandlers.keys())
-                newThreadID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG") #Creates a new REG call
-                return self.CommandParser(str(newThreadID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
+                newID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
         elif self._nodeType == "Client": #Clients only service @ commands, and will provide no automated response to anything but @ commands
             return command[0] + "|#" #NOOP command
@@ -154,7 +156,6 @@ class NodeGen():
 
             #get node of sender - to pass to the handler node
             senderNode = self._knownNodes[command[0]]
-
 
             if foundNode == "#":
                 return command[0] + "|This command is not available on the network"
@@ -184,7 +185,7 @@ class NodeGen():
             pass #TODO make this stop running if invalid input
 
         while True:
-            self.LoopNode()
+            self.LoopNode() #This is passed by the client, which has its own built in loopnode
 
     def DictCommand(self,child,commandsList): #Creates a dictionary of commands and which known nodes can process said commands
         for x in commandsList:

@@ -20,10 +20,8 @@ class HeartbeatModule:
         heartbeatSock.close()
 
         if heartbeatResult == 0:  # if the server on this port exists
-            print(f"{self._myOwnerType}({self._myOwnerIP},{self._myOwnerPort}): heartbeat to ({IP},{Port}) succeeded") #TODO fix to be either server or client
             return True
         else:
-            print(f"{self._myOwnerType}({self._myOwnerIP},{self._myOwnerPort}): heartbeat to ({IP},{Port}) failed")
             return False
 
 
