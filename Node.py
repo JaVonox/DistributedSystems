@@ -16,6 +16,7 @@ import MODULEHeartbeat
 import MODULEEcho
 import MODULEDict
 import MODULESpawner
+import MODULEMusic
 
 from threading import Thread
 from collections import defaultdict
@@ -219,6 +220,11 @@ class NodeGen():
         elif self._nodeType == "Dictionary":
             self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(self._IP,False)
+        elif self._nodeType == "TEMP": #TODO change this to be client focused
+            self._modules['MusicPlayer'] = MODULEMusic.MusicModule()
+            self._modules['MusicPlayer'].PlayMusic(1)
+            input("A")
+            exit()
         else:
             print("Invalid node type")
             input("Press any key to continue... ")
