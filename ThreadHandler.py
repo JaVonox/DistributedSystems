@@ -5,6 +5,13 @@ import queue
 import time
 from threading import Thread
 
+#list of commands to not print when sent/recieved and what should be printed instead.
+#These commands are used too often and clog up space in the console. So its not worth it to show the print
+ignoredCommands = [
+    "@REG",
+    "@REP",
+    "@DIR",
+]
 class ThreadHandler (Thread):
     def __init__(self,sType, host, port):
         Thread.__init__(self)
@@ -51,7 +58,8 @@ class ThreadHandler (Thread):
     def AppendData(self): #Moves data from writecommands list into the appropriate outb slot
         for NewSend in self.writeCommands:
             x = NewSend.split("|") #splits into array. [0] is the connection
-            self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
+            if int(x[0]) != -1: #-1 is the code for a connection that does not exist anymore
+                self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
 
         #TODO this must be cleared safely.
         self.writeCommands.clear()
@@ -112,10 +120,16 @@ class ThreadHandler (Thread):
         try:
             packageLen = key.fileobj.recv(10).decode() #Get first 10 characters - defines how long the next part of the packet will be
             recv_data = key.fileobj.recv(int(packageLen)).decode()
-            print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
+
+            if recv_data.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
+                pass
+            else:
+                print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
+
             key.data.inb.append(recv_data)
         except: #if an error occurs when attempting to read the package
             print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())}")
+            self.readCommands.append(str(key.data.myName) + "|@CLOSED") #Manually add to readcommands, since the connection will not be active in a second
             self.KillConnection(key)
 
     def _write(self, key):
@@ -134,7 +148,11 @@ class ThreadHandler (Thread):
             packet = packetHeaderPadded + message
 
             key.fileobj.send(packet.encode())
-            print(f"{self._type}({self._host},{self._port}): sent message '{message}' to {key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
+
+            if message.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
+                pass
+            else:
+                print(f"{self._type}({self._host},{self._port}): sent message '{message}' to {key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
 
 
     def postMessage(self, id, message):

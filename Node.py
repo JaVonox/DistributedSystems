@@ -3,7 +3,6 @@ RESTRICTED VALUES
 | SEPERATOR
 @ ROUTER TO NON-MODULE FUNCTION
 # CALL TO SWITCH TO READ MODE
-? NEWLINE
 """
 
 import ThreadHandler
@@ -32,10 +31,12 @@ class NodeGen():
 
         self._parentIP = parentIP
         self._parentPort = parentPort
+
         self._knownNodes = {} # Thread : NodeData
 
         self._commandHandlers = {} #command : handler (Self commands)
         self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command]
+        self._heldCommands = [] #holds commands that require a redirect
 
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 51321 is the prime node.
 
@@ -105,6 +106,16 @@ class NodeGen():
         if len(self._modules['Service'].readCommands) > 0: #If command exists in read commands buffer
             self._modules['Service'].writeCommands.append(self.CommandParser(self._modules['Service'].readCommands[0])) #Interpret command and return result
             del self._modules['Service'].readCommands[0]
+        #TODO add timeout and polling of commands based on wait time?
+        if len(self._heldCommands) > 0:
+            commandsToKill = []
+            for x in self._heldCommands: #this checks if a command is held to be processed - likely a one that would require a DIR response.
+                if self.ReturnNodeHandler(x.split("|")[1]) != "#": #check if a handler now exists for this command
+                    self._modules['Service'].writeCommands.append(self.CommandParser(x)) #resend the command when a handler spawns
+                    commandsToKill.append(self._heldCommands.index(x))
+
+            for y in commandsToKill: #remove all processed commands
+                del self._heldCommands[y]
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
@@ -112,13 +123,15 @@ class NodeGen():
     def CommandParser(self,commandInput): #TODO add any error checking to this
         command = commandInput.split("|") #Sender Thread,Command,Message
 
+        if '' in command: #handles any inputs of || which would otherwise break the system
+            return command[0] + "|An error occurred while progressing query arguments - please resubmit your query"
+
+
         #Standard should be:
         #RouteThread|Command|Argument1|Argument2 etc.
 
-        #TODO invalid number of arguments breaks things
-        #TODO remove ability for client to send @ manually?
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
-            # Builtin Commands (start with @)
+            # Builtin Commands (start with @). Queries containing @ cannot be manually entered
 
             if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT REP RESPONSE
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
@@ -141,8 +154,19 @@ class NodeGen():
                 return command[0] + "|#"
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
+                #Only runs first time a node has to pass a command onwards
                 newID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG") #Creates a new REG call
                 return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
+
+            elif command[1] == "@CLOSED": #If a network connection is closed remove its relevant data from the requested commands
+                if command[0] in self._knownNodes: #if the id is in the known nodes
+                    deadNode = self._knownNodes[command[0]]
+                    self.KillNode(deadNode)
+                else:
+                    pass
+                #TODO test with more than one node of same type
+
+            return "-1|#"
 
         elif self._nodeType == "Client": #Clients only service @ commands, and will provide no automated response to anything but @ commands
             return command[0] + "|#" #NOOP command
@@ -156,16 +180,26 @@ class NodeGen():
             return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:])
 
         else:
+            #TODO update node handlers occasionally as fault tolerance?
             #search for node who can process requested command
             foundNode = self.ReturnNodeHandler(command[1])
 
             #get node of sender - to pass to the handler node
             senderNode = self._knownNodes[command[0]]
 
-            if foundNode == "#":
-                return command[0] + "|This command is not available on the network"
+            if foundNode == "#" and self._modules['NodeSpawn'] is not None: #If the module has a nodespawner and the module does not already exist
+                nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
+                if nodeSpawn != "#":
+                    self._modules['NodeSpawn'].Spawn(nodeSpawn)
+                    self._heldCommands.append("|".join(command)) #adds the current command to the list of commands that need handling.
+                    return command[0] + "|Spawned handler for this command. Please wait for a response."
+                else:
+                    return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
+            if foundNode == "#": #No known node
+                return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes"
             else:
                 #Thread that runs the handler + listening ports of requester + initial request of user
+                #This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
                 return foundNode.RetValues()["Thread"] + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
 
     def AppendModules(self):
@@ -173,10 +207,12 @@ class NodeGen():
 
         if self._nodeType == "Control":
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
+            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary"}) #Allow spawning of these nodes
             self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
             self.CreateClient()
+            return
         elif self._nodeType == "Echo":
             self._modules['Echo'] = MODULEEcho.EchoModule()
             self.CreateServer(self._IP,False)
@@ -192,21 +228,34 @@ class NodeGen():
             self.LoopNode() #This is not accessed by the client, which has its own built in loopnode
 
 
-    def DictCommand(self,child,commandsList): #Creates a dictionary of commands and which known nodes can process said commands
+    def DictCommand(self,node,commandsList): #Creates a dictionary of commands and which known nodes can process said commands
         for x in commandsList:
             if x == "NA": #This is a command from the client - it signifies the client cannot run any commands
                 break
             else:
-                self._nodeHandlers[x].append(child)
+                self._nodeHandlers[x].append(node)
 
     def ReturnNodeHandler(self,requestedCommand): #Returns the first node that can handle a command
-        #TODO modify this to handle case inwhich there is no child with this command - so probably spawn a new one?
-        #TODO also this currently only contacts the first spawned child for a command
+        #TODO also this currently only contacts the first spawned node for a command
 
         if requestedCommand in self._nodeHandlers:
             return self._nodeHandlers[requestedCommand][0]
         else:
             return "#"
+
+    def KillNode(self,node): #this removes a node that has died from the list of command handlers
+        tmpCommands = self._nodeHandlers #all nodes known by this client
+        killIndex = []
+        for x in tmpCommands:
+            if node in tmpCommands[x]:
+                del self._nodeHandlers[str(x)][self._nodeHandlers[str(x)].index(node)]
+                if len(self._nodeHandlers[str(x)]) == 0: #if there is now no existing handlers
+                    killIndex.append(str(x)) #append to the list to kill
+
+        for y in killIndex: #kill all dead commands
+            del self._nodeHandlers[str(y)]
+
+
 
 class ExtNode():
     def __init__(self,nodeTypeArg,IPArg,PortArg,threadNum):
@@ -222,7 +271,7 @@ class ExtNode():
     def AddCommand(self,commandName):
         self._commands.append(commandName)
 
-class ClientInputReader(Thread):
+class ClientInputReader(Thread): #Only used by a client
     def __init__(self):
         Thread.__init__(self)
         self._requests = []
@@ -239,13 +288,18 @@ class ClientInputReader(Thread):
 
     def run(self): #request input
         while True:
-            self._requests.append(input(""))
-            self._requestFlag = True
+            submittedRequest = input("")
+            if "@" in submittedRequest or "#" in submittedRequest:
+                print("One or more disallowed characters were detected. Please do not use characters '@' or '#' and resubmit your query")
+            else:
+                self._requests.append(submittedRequest)
+                self._requestFlag = True
 
 
 def GetConnections():
     #On file is a list of valid IPs. This contains all the IPs the server deems "available" for connection
-    #On these IPs a control node should be running at the port 51321 - the prime
+    #TODO check if node should be prime or listener??
+    #On these IPs a node should be running at the port 51321 - the prime
     #TODO add listening node functionality
     #A control node can spawn up new nodes on each IP
     #TODO add this too
