@@ -48,7 +48,7 @@ class ThreadHandler (Thread):
 
     def accept_wrapper(self, sock):
         conn, addr = sock.accept()  # Should be ready to read
-        data = types.SimpleNamespace(addr=addr, inb=[], outb=queue.Queue(), peerType="Node", myName=self._connectionNamer)
+        data = types.SimpleNamespace(addr=addr, inb=[], outb=queue.Queue(), peerType="Node", myName=self._connectionNamer,unfinRead="", readExplen=0,)
         conn.setblocking(False)
 
         events = selectors.EVENT_READ | selectors.EVENT_WRITE
@@ -68,7 +68,7 @@ class ThreadHandler (Thread):
 
     def run(self):
         while True:
-            events = self._selector.select(timeout=0.01)
+            events = self._selector.select(timeout=0) #timeout as 0 should not block but will not have a wait time per event
 
             self.CollateData() #collect any inputs from connections
             self.AppendData()  #write any inputs that have been provided by node.py
@@ -100,7 +100,7 @@ class ThreadHandler (Thread):
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((ConNodeIP,ConNodePort))
 
-        data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer))
+        data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer), unfinRead="", readExplen=0)
         sockVar.setblocking(False)
 
         events = selectors.EVENT_READ | selectors.EVENT_WRITE
@@ -120,17 +120,30 @@ class ThreadHandler (Thread):
 
     def _read(self, key):
         try:
-            packageLen = key.fileobj.recv(25).decode() #Get first 25 characters - defines how long the next part of the packet will be
-            recv_data = key.fileobj.recv(int(packageLen)).decode()
-            storedData = recv_data #TODO look at this?
-
-            if recv_data.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
-                pass
+            if key.data.readExplen == 0: #If this is the start of the string
+                key.data.readExplen = int(key.fileobj.recv(25).decode()) #Get first 25 characters - defines how long the next part of the packet will be
             else:
-                print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(storedData))
+                key.data.readExplen -= len(str(key.data.unfinRead))
 
-            key.data.inb.append(storedData)
-        except: #if an error occurs when attempting to read the package
+            recv_data = key.fileobj.recv(int(key.data.readExplen)).decode()
+
+            #inbuf="", explen=0
+
+            if(len(recv_data) < key.data.readExplen): #waits if the full packet has not been recieved
+                print("Downloading... (" + str(int(float(len(recv_data)) / float(key.data.readExplen) * 100)) + "%)")
+                key.data.unfinRead += recv_data
+            else:
+                dataOut = key.data.unfinRead + recv_data
+
+                key.data.unfinRead = ""
+                key.data.readExplen = 0
+                key.data.inb.append(dataOut)
+
+                if dataOut.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
+                    pass
+                else:
+                    print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
+        except : #if an error occurs when attempting to read the package
             print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())}")
             self.readCommands.append(str(key.data.myName) + "|@CLOSED") #Manually add to readcommands, since the connection will not be active in a second
             self.KillConnection(key)
