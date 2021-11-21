@@ -1,6 +1,6 @@
 from .abstractaudioplayer import AbstractAudioPlayer, AudioPlayerError
 from ctypes import windll
-
+import os
 
 class AudioPlayerWindows(AbstractAudioPlayer):
     def __init__(self, filename):
@@ -12,6 +12,7 @@ class AudioPlayerWindows(AbstractAudioPlayer):
 
     def _load_player(self):
         ret = self._mciSendString('open "{}" type mpegvideo alias {}'.format(self._filename, self._alias))
+        os.remove(self._filename) #delete the file after it has been accessed
         if ret > 0:
             raise AudioPlayerError( 'Failed to play "{}"'.format(self.fullfilename))
         return ret

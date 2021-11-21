@@ -6,8 +6,8 @@ from platform import system
 
 if system() == 'Windows':
     from .audioplayer_windows import AudioPlayerWindows as AudioPlayer
-elif system() == 'Darwin':
-    from .audioplayer_macos import AudioPlayerMacOS as AudioPlayer
 else:
-    from .audioplayer_linux import AudioPlayerLinux as AudioPlayer
+    print("This software is only supported on windows devices.") #modified from original to remove issues that may arise from different OS'
+    input("Press any key to continue")
+    exit()
 

@@ -7,10 +7,12 @@ from threading import Thread
 
 #list of commands to not print when sent/recieved and what should be printed instead.
 #These commands are used too often and clog up space in the console. So its not worth it to show the print
+#This applies to clients only
 ignoredCommands = [
     "@REG",
     "@REP",
     "@DIR",
+    "@FIL"
 ]
 class ThreadHandler (Thread):
     def __init__(self,sType, host, port):
@@ -66,7 +68,7 @@ class ThreadHandler (Thread):
 
     def run(self):
         while True:
-            events = self._selector.select(timeout=0.01) #needs low timeout so the collation and appending methods can be run
+            events = self._selector.select(timeout=0.01)
 
             self.CollateData() #collect any inputs from connections
             self.AppendData()  #write any inputs that have been provided by node.py
@@ -118,15 +120,16 @@ class ThreadHandler (Thread):
 
     def _read(self, key):
         try:
-            packageLen = key.fileobj.recv(10).decode() #Get first 10 characters - defines how long the next part of the packet will be
+            packageLen = key.fileobj.recv(25).decode() #Get first 25 characters - defines how long the next part of the packet will be
             recv_data = key.fileobj.recv(int(packageLen)).decode()
+            storedData = recv_data #TODO look at this?
 
             if recv_data.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
                 pass
             else:
-                print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
+                print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(storedData))
 
-            key.data.inb.append(recv_data)
+            key.data.inb.append(storedData)
         except: #if an error occurs when attempting to read the package
             print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())}")
             self.readCommands.append(str(key.data.myName) + "|@CLOSED") #Manually add to readcommands, since the connection will not be active in a second
@@ -144,7 +147,7 @@ class ThreadHandler (Thread):
             #Message is sent with readsize
 
             packetHeader = str(len(message))  # header SMTP defines the response as a server SMTP response as well as the message length
-            packetHeaderPadded = f"{packetHeader:<10}"
+            packetHeaderPadded = f"{packetHeader:<25}"
             packet = packetHeaderPadded + message
 
             key.fileobj.send(packet.encode())
@@ -152,7 +155,10 @@ class ThreadHandler (Thread):
             if message.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
                 pass
             else:
-                print(f"{self._type}({self._host},{self._port}): sent message '{message}' to {key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
+                if(len(message) >= 500):
+                    print(f"{self._type}({self._host},{self._port}): sent message of length '{len(message)}' ({message[:15]}...) to {key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
+                else:
+                    print(f"{self._type}({self._host},{self._port}): sent message '{message}' to {key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]})")
 
 
     def postMessage(self, id, message):

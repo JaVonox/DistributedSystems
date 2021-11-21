@@ -17,6 +17,7 @@ import MODULEEcho
 import MODULEDict
 import MODULESpawner
 import MODULEMusic
+import MODULEFileSend
 
 from threading import Thread
 from collections import defaultdict
@@ -122,11 +123,7 @@ class NodeGen():
 
 
     def CommandParser(self,commandInput): #TODO add any error checking to this
-        command = commandInput.split("|") #Sender Thread,Command,Message
-
-        if '' in command: #handles any inputs of || which would otherwise break the system
-            return command[0] + "|An error occurred while progressing query arguments - please resubmit your query"
-
+        command = commandInput.split("|") #Sender Thread,Command,MessageC
 
         #Standard should be:
         #RouteThread|Command|Argument1|Argument2 etc.
@@ -167,9 +164,14 @@ class NodeGen():
                     pass
                 #TODO test with more than one node of same type
 
+            elif command[1] == "@FIL" and self._nodeType == "Client": #this accepts a file as parameters, used for sending music across the network. only accepted by clients
+                #This expects the bytes as a hex in command[2], then converts back to bytes
+                self._modules['MusicPlayer'].PlayMusic([bytes.fromhex(command[2])])
+                return command[0] + "|#"
+
             return "-1|#"
 
-        elif self._nodeType == "Client": #Clients only service @ commands, and will provide no automated response to anything but @ commands
+        elif self._nodeType == "Client": #Clients only service @ commands
             return command[0] + "|#" #NOOP command
 
         elif command[1] == "HELP":
@@ -188,7 +190,7 @@ class NodeGen():
             #get node of sender - to pass to the handler node
             senderNode = self._knownNodes[command[0]]
 
-            if foundNode == "#" and self._modules['NodeSpawn'] is not None: #If the module has a nodespawner and the module does not already exist
+            if foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
                 nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
                 if nodeSpawn != "#":
                     self._modules['NodeSpawn'].Spawn(nodeSpawn)
@@ -208,10 +210,17 @@ class NodeGen():
 
         if self._nodeType == "Control":
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
-            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary"}) #Allow spawning of these nodes
+            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor"}) #Allow spawning of these nodes
             self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
+            self._modules['MusicPlayer'] = MODULEMusic.MusicModule()
+            #reader = open("Music/Beepy/Moonsetter.mp3", "rb")
+            #bytesRead = reader.read()
+            self._modules['MusicPlayer'].start() #Start the music player, no music is loaded yet though
+            #TODO maybe only start music player when the system needs it?
+            #self._modules['MusicPlayer'].PlayMusic([bytesRead])
+            #reader.close()
             self.CreateClient()
             return
         elif self._nodeType == "Echo":
@@ -220,11 +229,9 @@ class NodeGen():
         elif self._nodeType == "Dictionary":
             self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(self._IP,False)
-        elif self._nodeType == "TEMP": #TODO change this to be client focused
-            self._modules['MusicPlayer'] = MODULEMusic.MusicModule()
-            self._modules['MusicPlayer'].PlayMusic(1)
-            input("A")
-            exit()
+        elif self._nodeType == "Distributor":
+            self._modules['Distrib'] = MODULEFileSend.DistributorModule()
+            self.CreateServer(self._IP,False)
         else:
             print("Invalid node type")
             input("Press any key to continue... ")

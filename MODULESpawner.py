@@ -1,6 +1,7 @@
 import subprocess
 import MODULEEcho
 import MODULEDict
+import MODULEFileSend
 
 class SpawnerModule:
     def __init__(self):
@@ -61,4 +62,5 @@ class SpawnerModule:
 spawnables = {  # list of all possible nodes to spawn
     "Control" : SpawnerModule(),
     "Echo": MODULEEcho.EchoModule(),
-    "Dictionary": MODULEDict.DictModule()}
+    "Dictionary": MODULEDict.DictModule(),
+    "Distributor": MODULEFileSend.DistributorModule()}
