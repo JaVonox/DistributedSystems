@@ -76,7 +76,7 @@ class ThreadHandler (Thread):
             for key, mask in events:
                 if key.data is None: #if the key is not initialised
                     self.accept_wrapper(key.fileobj) #add new connection to modules
-                elif mask & selectors.EVENT_READ:
+                elif mask & selectors.EVENT_READ or key.data.readExplen != 0: #if the node is expecting a read or has pending data output
                     self._read(key)
                 elif mask & selectors.EVENT_WRITE and not key.data.outb.empty():
                     self._write(key)
@@ -122,16 +122,16 @@ class ThreadHandler (Thread):
         try:
             if key.data.readExplen == 0: #If this is the start of the string
                 key.data.readExplen = int(key.fileobj.recv(25).decode()) #Get first 25 characters - defines how long the next part of the packet will be
+                if(key.data.readExplen >= 1024): #if there is a lot of data to send
+                    print(f"{self._type}({self._host},{self._port}): Downloading a lot of data... please wait...")
             else:
-                key.data.readExplen -= len(str(key.data.unfinRead))
+                pass
 
             recv_data = key.fileobj.recv(int(key.data.readExplen)).decode()
 
-            #inbuf="", explen=0
-
             if(len(recv_data) < key.data.readExplen): #waits if the full packet has not been recieved
-                print("Downloading... (" + str(int(float(len(recv_data)) / float(key.data.readExplen) * 100)) + "%)")
                 key.data.unfinRead += recv_data
+                key.data.readExplen -= len(recv_data)
             else:
                 dataOut = key.data.unfinRead + recv_data
 
@@ -143,8 +143,8 @@ class ThreadHandler (Thread):
                     pass
                 else:
                     print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
-        except : #if an error occurs when attempting to read the package
-            print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())}")
+        except: #if an error occurs when attempting to read the package (likely a closed port)
+            print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())} (This could be a heartbeat)")
             self.readCommands.append(str(key.data.myName) + "|@CLOSED") #Manually add to readcommands, since the connection will not be active in a second
             self.KillConnection(key)
 
