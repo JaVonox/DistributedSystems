@@ -1,0 +1,1 @@
+If this file exists, the cache exists on your system.
