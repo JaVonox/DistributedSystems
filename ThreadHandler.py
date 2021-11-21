@@ -144,7 +144,8 @@ class ThreadHandler (Thread):
                 else:
                     print(f"{key.data.peerType}({key.fileobj.getpeername()[0]},{key.fileobj.getpeername()[1]}):", repr(recv_data))
         except Exception as e: #if an error occurs when attempting to read the package (likely a closed port)
-            print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())} (This could be a heartbeat)")
+            if key.data.peerType != "Node": #Should eliminate most heartbeat requests from being printed
+                print(f"{self._type}({self._host},{self._port}): connection closed by {key.data.peerType}{repr(key.fileobj.getpeername())}")
             self.readCommands.append(str(key.data.myName) + "|@CLOSED") #Manually add to readcommands, since the connection will not be active in a second
             self.KillConnection(key)
 
