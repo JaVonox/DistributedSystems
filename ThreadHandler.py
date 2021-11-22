@@ -134,7 +134,7 @@ class ThreadHandler (Thread):
 
                 #if greater than the percentage last progress printed at (default 10)
                 if float(key.data.initExplen - key.data.readExplen) / float(key.data.initExplen) * 100 > float(key.data.lastPrint):
-                    print("Downloading... (" + str(round(float(key.data.initExplen - key.data.readExplen) / float(key.data.initExplen)) * 100) + "%)") #Print progress
+                    print("Downloading... (" + str(round((float(key.data.initExplen - key.data.readExplen) / float(key.data.initExplen)* 100))) + "%)") #Print progress
                     key.data.lastPrint += 10
 
             else:
