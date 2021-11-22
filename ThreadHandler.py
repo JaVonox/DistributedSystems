@@ -43,13 +43,13 @@ class ThreadHandler (Thread):
         self._listening_socket.listen()
 
         print(f"{self._type}({self._host},{self._port}): listening on", (self._host, self._port))
-        self._listening_socket.setblocking(False)
+        self._listening_socket.setblocking(True)
         self._selector.register(self._listening_socket, selectors.EVENT_READ, data=None) #this only reads in new connections
 
     def accept_wrapper(self, sock):
         conn, addr = sock.accept()  # Should be ready to read
-        data = types.SimpleNamespace(addr=addr, inb=[], outb=queue.Queue(), peerType="Node", myName=self._connectionNamer,unfinRead="", readExplen=0,)
-        conn.setblocking(False)
+        data = types.SimpleNamespace(addr=addr, inb=[], outb=queue.Queue(), peerType="Node", myName=self._connectionNamer,unfinRead="", readExplen=0, initExplen=0, lastPrint=10)
+        conn.setblocking(True)
 
         events = selectors.EVENT_READ | selectors.EVENT_WRITE
         selectorObj = self._selector.register(conn, events, data=data)
@@ -67,7 +67,7 @@ class ThreadHandler (Thread):
 
     def run(self):
         while True:
-            events = self._selector.select(timeout=0) #timeout as 0 should not block but will not have a wait time per event
+            events = self._selector.select(timeout=0)
 
             self.CollateData() #collect any inputs from connections
             self.AppendData()  #write any inputs that have been provided by node.py
@@ -98,8 +98,8 @@ class ThreadHandler (Thread):
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((ConNodeIP,ConNodePort))
 
-        data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer), unfinRead="", readExplen=0)
-        sockVar.setblocking(False)
+        data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer), unfinRead="", readExplen=0, initExplen=0, lastPrint=10)
+        sockVar.setblocking(True)
 
         events = selectors.EVENT_READ | selectors.EVENT_WRITE
         selectorObj = self._selector.register(sockVar, events, data=data)
@@ -120,6 +120,7 @@ class ThreadHandler (Thread):
         try:
             if key.data.readExplen == 0: #If this is the start of the string
                 key.data.readExplen = int(key.fileobj.recv(25).decode()) #Get first 25 characters - defines how long the next part of the packet will be
+                key.data.initExplen = key.data.readExplen #store initial explen
                 if(key.data.readExplen >= 1024): #if there is a lot of data to send
                     print(f"{self._type}({self._host},{self._port}): Downloading a lot of data... please wait...")
             else:
@@ -130,11 +131,19 @@ class ThreadHandler (Thread):
             if(len(recv_data) < key.data.readExplen): #waits if the full packet has not been recieved
                 key.data.unfinRead += recv_data
                 key.data.readExplen -= len(recv_data)
+
+                #if greater than the percentage last progress printed at (default 10)
+                if float(key.data.initExplen - key.data.readExplen) / float(key.data.initExplen) * 100 > float(key.data.lastPrint):
+                    print("Downloading... (" + str(round(float(key.data.initExplen - key.data.readExplen) / float(key.data.initExplen)) * 100) + "%)") #Print progress
+                    key.data.lastPrint += 10
+
             else:
                 dataOut = key.data.unfinRead + recv_data
 
+                #reset data
                 key.data.unfinRead = ""
                 key.data.readExplen = 0
+                key.data.lastPrint = 10
                 key.data.inb.append(dataOut)
 
                 if dataOut.split("|")[0] in ignoredCommands and self._type == "Client": #this stops the client printing data that it doesnt require
