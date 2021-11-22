@@ -7,7 +7,7 @@ from threading import Thread #This must be a thread so music can play while the 
 class MusicModule(Thread): #Client only Module
     def __init__(self):
         Thread.__init__(self)
-        self._volume = 100
+        self._volume = 20
         self._currentPlayer = None
         self._validCommands = {"VOLUME" : self.SetSound,
                                "RESUME" : self.ResumeSound,

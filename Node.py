@@ -39,6 +39,7 @@ class NodeGen():
         self._commandHandlers = {} #command : handler (Self commands)
         self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command]
         self._heldCommands = [] #holds commands that require a redirect
+        self._fileHandler = defaultdict(list)
 
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 51321 is the prime node.
 
@@ -81,6 +82,7 @@ class NodeGen():
         for IP in self._IPList: #loop through all IPs to find the first that exists
 
             if self._modules['Heartbeat'].HeartbeatPort(IP,51321): #Set up client listening port
+                print("Found server. Connecting...")
                 self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 41322)) #Iterates and returns next available port on specified IP
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
                 self._modules['Service'].start()
@@ -156,6 +158,7 @@ class NodeGen():
                 message = command[0] + "|@REP|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort)
                 for x in self._commandHandlers.keys():  # Append list of any commands this node can handle, for routing later.
                     message += "|" + x
+
                 return message
 
             elif command[1] == "@REP": #RESPOND TO REGISTER COMMAND - EXPECT NO RESPONSE
@@ -163,7 +166,6 @@ class NodeGen():
                 self._modules['Service'].DefineType(command[0], command[2])
                 self._knownNodes[command[0]] = newNode
                 self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
-
                 return command[0] + "|#"
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
@@ -189,7 +191,6 @@ class NodeGen():
 
 
         elif self._nodeType == "Client": #Clients only service @ commands
-
             return command[0] + "|#" #NOOP command
 
         elif command[1] == "HELP":
@@ -241,8 +242,8 @@ class NodeGen():
         elif self._nodeType == "Dictionary":
             self._modules['Dict'] = MODULEDict.DictModule()
             self.CreateServer(self._IP,False)
-        elif self._nodeType == "Distributor":
-            self._modules['Distrib'] = MODULEFileSend.DistributorModule()
+        elif self._nodeType == "Distributor": #used to handle the sending of files across a network
+            self._modules['Distributor'] = MODULEFileSend.DistributorModule()
             self.CreateServer(self._IP,False)
         else:
             print("Invalid node type")
