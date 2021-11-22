@@ -12,12 +12,12 @@ import time
 import socket
 
 #Modules
-import MODULEHeartbeat
-import MODULEEcho
-import MODULEDict
-import MODULESpawner
-import MODULEMusic
-import MODULEFileSend
+from Modules import MODULEHeartbeat
+from Modules import MODULEEcho
+from Modules import MODULEDict
+from Modules import MODULESpawner
+from Modules import MODULEMusic
+from Modules import MODULEFileSend
 
 from threading import Thread
 from collections import defaultdict

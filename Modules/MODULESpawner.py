@@ -1,7 +1,7 @@
 import subprocess
-import MODULEEcho
-import MODULEDict
-import MODULEFileSend
+from Modules import MODULEEcho
+from Modules import MODULEDict
+from Modules import MODULEFileSend
 
 class SpawnerModule:
     def __init__(self):
