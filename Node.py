@@ -74,6 +74,10 @@ class NodeGen():
 
     def CreateClient(self): #Autoconnects to prime node
 
+        for x in self._modules.values(): #gets all module classes that can exist
+            for y in x.ReturnCommands():
+                self._commandHandlers[y] = x
+
         for IP in self._IPList: #loop through all IPs to find the first that exists
 
             if self._modules['Heartbeat'].HeartbeatPort(IP,51321): #Set up client listening port
@@ -92,13 +96,15 @@ class NodeGen():
                     if self._modules['InputReader'].ReadFlag(): #If a client has submitted a request
                         tmpInputs = self._modules['InputReader'].ReadRequest()
                         for x in tmpInputs: #append all submitted inputs
-                            commands = x.split("|") #Gets the first command
-                            route = self.ReturnNodeHandler(commands[0])
+                            if self.CheckSelfCommands(x):
+                                commands = x.split("|") #Gets the first command
+                                route = self.ReturnNodeHandler(commands[0])
 
-                            if route == "#":
-                                self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
-                            else:
-                                self._modules['Service'].writeCommands.append(str(route.RetValues()['Thread']) + "|" + x)  # routed node
+                                #TODO allow changing of control node?
+                                if route == "#":
+                                    self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
+                                else:
+                                    self._modules['Service'].writeCommands.append(str(route.RetValues()['Thread']) + "|" + x)  # routed node
                     else:
                         self.LoopNode()
 
@@ -108,7 +114,6 @@ class NodeGen():
         if len(self._modules['Service'].readCommands) > 0: #If command exists in read commands buffer
             self._modules['Service'].writeCommands.append(self.CommandParser(self._modules['Service'].readCommands[0])) #Interpret command and return result
             del self._modules['Service'].readCommands[0]
-        #TODO add timeout and polling of commands based on wait time?
         if len(self._heldCommands) > 0:
             commandsToKill = []
             for x in self._heldCommands: #this checks if a command is held to be processed - likely a one that would require a DIR response.
@@ -121,12 +126,22 @@ class NodeGen():
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
+    def CheckSelfCommands(self,commandInput): #Client only - checks if a command is directed towards a self-owned module.
+        command = commandInput.split("|")
 
-    def CommandParser(self,commandInput): #TODO add any error checking to this
+        if command[0] in self._commandHandlers.keys():
+            self._commandHandlers[command[0]].CommandPoll(command[0], command[1:])
+            return False #Owned command - no response required.
+        else:
+            return True #No owned command
+
+
+    def CommandParser(self,commandInput):
         command = commandInput.split("|") #Sender Thread,Command,MessageC
 
         #Standard should be:
         #RouteThread|Command|Argument1|Argument2 etc.
+        command = [' ' if a == '' else a for a in command] #replaces all empty commands with a space to stop index errors
 
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @). Queries containing @ cannot be manually entered
@@ -157,6 +172,7 @@ class NodeGen():
                 return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
             elif command[1] == "@CLOSED": #If a network connection is closed remove its relevant data from the requested commands
+                #Closed should always be received if a connection closes, since the reading node itself will create this request if it loses a connection
                 if command[0] in self._knownNodes: #if the id is in the known nodes
                     deadNode = self._knownNodes[command[0]]
                     self.KillNode(deadNode)
@@ -171,19 +187,20 @@ class NodeGen():
 
             return "-1|#"
 
+
         elif self._nodeType == "Client": #Clients only service @ commands
+
             return command[0] + "|#" #NOOP command
 
         elif command[1] == "HELP":
             return command[0] + "|Network is currently running the following commands: " + str(",".join(self._commandHandlers.keys())) + ":" + str(",".join(self._nodeHandlers.keys()))
 
-        elif command[1] in self._commandHandlers:
+        elif command[1] in self._commandHandlers.keys():
             #Modular Commands
             #directs the command to the handling module
             return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:])
 
         else:
-            #TODO update node handlers occasionally as fault tolerance?
             #search for node who can process requested command
             foundNode = self.ReturnNodeHandler(command[1])
 
@@ -215,12 +232,7 @@ class NodeGen():
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Client":
             self._modules['MusicPlayer'] = MODULEMusic.MusicModule()
-            #reader = open("Music/Beepy/Moonsetter.mp3", "rb")
-            #bytesRead = reader.read()
             self._modules['MusicPlayer'].start() #Start the music player, no music is loaded yet though
-            #TODO maybe only start music player when the system needs it?
-            #self._modules['MusicPlayer'].PlayMusic([bytesRead])
-            #reader.close()
             self.CreateClient()
             return
         elif self._nodeType == "Echo":

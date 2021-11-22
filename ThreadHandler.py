@@ -63,7 +63,6 @@ class ThreadHandler (Thread):
             if int(x[0]) != -1: #-1 is the code for a connection that does not exist anymore
                 self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
 
-        #TODO this must be cleared safely.
         self.writeCommands.clear()
 
     def run(self):
@@ -89,7 +88,6 @@ class ThreadHandler (Thread):
 
     def CollateData(self): #loop through all running connections to get commands and add to outgoing commands list, to be read and processed by Node.py
         for x in self._activeConnections.values():
-            #TODO inb needs to become a queue to stop threading issues removing data
             commandsToStore = x.data.inb #get all stored read commands for this connection
             x.data.inb = [] #clear inb of x after aquiring all commands that currently exist
             for y in commandsToStore: #loop through commands
