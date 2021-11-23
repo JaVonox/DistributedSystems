@@ -82,7 +82,7 @@ class NodeGen():
 
             if self._modules['Heartbeat'].HeartbeatPort(IP,50001): #Set up client listening port
                 print("Found server. Connecting...")
-                self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50001)) #Iterates and returns next available port on specified IP
+                self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
                 self._modules['Service'].start()
 
@@ -341,7 +341,7 @@ def GetConnections():
 def GetMyValidIP(): #Gets the IP the system can run from
     try:
         runningSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        runningSock.connect(("8.8.8.8", 80))
+        runningSock.connect(("8.8.8.8", 80)) #Allegedly this doesnt actually need to make a connection to work, but its better to be safe and use the working 8.8.8.8 gmail IP
         return runningSock.getsockname()[0]  # return the IP address that connected (This gets the connection that an IP can access)
     except:
         print("Connection could not be made to the internet. This system requires an active internet connection to function")
