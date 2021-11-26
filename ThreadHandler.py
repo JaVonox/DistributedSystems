@@ -94,7 +94,7 @@ class ThreadHandler (Thread):
                 self.readCommands.append(str(x.data.myName) + "|" + y)
 
 
-    def ContactNode(self,ConNodeIP,ConNodePort,commands,messageType): #For node to node. messageType = @REG, @REP etc.
+    def ContactNode(self,ConNodeIP,ConNodePort,Load,commands,messageType): #For node to node. messageType = @REG, @REP etc.
         sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sockVar.connect((ConNodeIP,ConNodePort))
 
@@ -108,7 +108,7 @@ class ThreadHandler (Thread):
         self._activeConnections[self._connectionNamer] = selectorObj #adds the connection at the next available address
         self._connectionNamer += 1 #increment connection namer
 
-        message = messageType + "|" + str(self._type) + "|" + str(self._host) + "|" + str(self._port)
+        message = messageType + "|" + str(self._type) + "|" + str(self._host) + "|" + str(self._port) + "|" + str(Load)
 
         for x in commands: #Append list of any commands this node can handle, for routing later.
             message += "|" + x

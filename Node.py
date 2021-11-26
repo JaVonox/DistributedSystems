@@ -2,6 +2,7 @@
 RESTRICTED VALUES
 | SEPERATOR
 @ ROUTER TO NON-MODULE FUNCTION
+* ROUTER TO LOAD BALANCING
 # CALL TO SWITCH TO READ MODE
 """
 
@@ -18,6 +19,8 @@ from Modules import MODULEDict
 from Modules import MODULESpawner
 from Modules import MODULEMusic
 from Modules import MODULEFileSend
+from Modules import MODULELoadBalancer
+from Modules import MODULELoadReporter
 
 from threading import Thread
 from collections import defaultdict
@@ -37,7 +40,7 @@ class NodeGen():
         self._knownNodes = {} # Thread : NodeData
 
         self._commandHandlers = {} #command : handler (Self commands)
-        self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command]
+        self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command (in EXTNODE format)]
         self._heldCommands = [] #holds commands that require a redirect
 
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 50001 is the prime node.
@@ -46,7 +49,7 @@ class NodeGen():
 
     def CreateServer(self,IP,attemptBase): #Creates a thread listener
 
-        for x in self._modules.values(): #gets all module classes that can exist
+        for x in self._modules.values(): #gets all module classes that can exist on this node
             for y in x.ReturnCommands():
                 self._commandHandlers[y] = x
         #Service cannot exist when creating command handlers - it being a module messes things up
@@ -67,10 +70,7 @@ class NodeGen():
         self._modules['Service'].start()
 
         if self._parentPort != 0 and self._parentIP != 0: #Sends a contact request to the parent node
-            self._modules['Service'].ContactNode(self._parentIP,self._parentPort,self._commandHandlers.keys(),"@REG") #Send contact info to parent
-
-
-
+            self._modules['Service'].ContactNode(self._parentIP,self._parentPort,self._modules['LoadRep'].ReturnLoad({""}),self._commandHandlers.keys(),"@REG") #Send contact info to parent
 
     def CreateClient(self): #Autoconnects to prime node
 
@@ -89,7 +89,7 @@ class NodeGen():
                 print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on non-prime location ({self._IP}, {self._connectedPort})")
                 print("Command Syntax: COMMAND|PARAMS")
 
-                self._modules['Service'].ContactNode(IP,50001,["NA"],"@REG")
+                self._modules['Service'].ContactNode(IP,50001,"NA",["NA"],"@REG")
                 self._modules['InputReader'] = ClientInputReader() #Starts thread to handle client entering data
                 self._modules['InputReader'].start()
 
@@ -99,13 +99,13 @@ class NodeGen():
                         for x in tmpInputs: #append all submitted inputs
                             if self.CheckSelfCommands(x):
                                 commands = x.split("|") #Gets the first command
-                                route = self.ReturnNodeHandler(commands[0])
+                                route = self.ReturnNodeHandler(commands[0]) #return the thread of the handler
 
                                 #TODO allow changing of control node?
                                 if route == "#":
                                     self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
                                 else:
-                                    self._modules['Service'].writeCommands.append(str(route.RetValues()['Thread']) + "|" + x)  # routed node
+                                    self._modules['Service'].writeCommands.append(str(route) + "|" + x)  # routed node
                     else:
                         self.LoopNode()
 
@@ -124,6 +124,28 @@ class NodeGen():
 
             for y in commandsToKill: #remove all processed commands
                 del self._heldCommands[y]
+        if "LoadRep" in self._modules:
+            clients=0
+            for a in self._knownNodes.values():
+                if(a.RetValues()["Type"] == "Client"):
+                    clients+=1
+            needUpdate = self._modules['LoadRep'].UpdateLoad(clients)
+            if needUpdate == 1 and "LoadBal" not in self._modules: #when a node value changes but the node does not have a node balancing module
+                #Report change in balance to parent. Each node should only have *one* known control node unless it is a control node itself
+                #TODO verify nodes should not know control nodes?
+                #TODO make nodes shutdown if they no longer know a control node
+                threadOfParent = "" #finds the thread of the parent
+                for b in self._knownNodes.values():
+                    if(b.RetValues()["Type"] == "Control"):
+                        threadOfParent = str(b.RetValues()["Thread"])
+                        break
+                message = str(threadOfParent) + "|*LOADUPDATE|" + self._IP + "|" + str(self._connectedPort) + "|" + str(clients) #message to send to parent to update their load balancing dataset
+
+                self._modules['Service'].writeCommands.append(message) #This does not need to go through command parser because it is already a complete command
+                pass
+            elif needUpdate == 1 and "LoadBal" in self._modules:
+                #TODO add this
+                pass
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
@@ -147,14 +169,22 @@ class NodeGen():
         if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
             # Builtin Commands (start with @). Queries containing @ cannot be manually entered
 
+            #this ensures the client reports its load as NA but other nodes report the correct load
+            selfload = "NA"
+            if "LoadRep" in self._modules:
+                selfload = str(self._modules['LoadRep'].ReturnLoad({""}))
+
             if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT REP RESPONSE
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
                 self._modules['Service'].DefineType(command[0],command[2])
                 self._knownNodes[command[0]] = newNode
-                self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
+                self.DictCommand(newNode,command[6:]) #add the commands the child can do to a list of commands that a child can process
+
+                if "LoadBal" in self._modules: #if this module can load balance, add the node data into the load balancer
+                    self._modules["LoadBal"].RegisterLoad(command[0],command[5]) #append node load
 
                 #Formats a response to the node to tell it to identify itself
-                message = command[0] + "|@REP|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort)
+                message = command[0] + "|@REP|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort) + "|" + selfload
                 for x in self._commandHandlers.keys():  # Append list of any commands this node can handle, for routing later.
                     message += "|" + x
 
@@ -164,12 +194,16 @@ class NodeGen():
                 newNode = ExtNode(command[2], command[3], command[4], command[0])
                 self._modules['Service'].DefineType(command[0], command[2])
                 self._knownNodes[command[0]] = newNode
-                self.DictCommand(newNode,command[5:]) #add the commands the child can do to a list of commands that a child can process
+
+                if "LoadBal" in self._modules: #if this module can load balance, add the node data into the load balancer
+                    self._modules["LoadBal"].RegisterLoad(command[0],command[5]) #append node load
+
+                self.DictCommand(newNode,command[6:]) #add the commands the child can do to a list of commands that a child can process
                 return command[0] + "|#"
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
                 #Only runs first time a node has to pass a command onwards
-                newID = self._modules['Service'].ContactNode(command[2], int(command[3]),self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                newID = self._modules['Service'].ContactNode(command[2], int(command[3]),selfload,self._commandHandlers.keys(),"@REG") #Creates a new REG call
                 return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
             elif command[1] == "@CLOSED": #If a network connection is closed remove its relevant data from the requested commands
@@ -177,6 +211,10 @@ class NodeGen():
                 if command[0] in self._knownNodes: #if the id is in the known nodes
                     deadNode = self._knownNodes[command[0]]
                     self.KillNode(deadNode)
+                    del self._knownNodes[command[0]] #remove node from list of nodes
+
+                    if "LoadBal" in self._modules:
+                        self._modules["LoadBal"].KillThread(command[0])
                 else:
                     pass
                 #TODO test with more than one node of same type
@@ -193,15 +231,17 @@ class NodeGen():
             return command[0] + "|#" #NOOP command
 
         elif command[1] == "HELP":
+            #TODO remove * commands from this list
             return command[0] + "|Network is currently running the following commands: " + str(",".join(self._commandHandlers.keys())) + ":" + str(",".join(self._nodeHandlers.keys()))
 
         elif command[1] in self._commandHandlers.keys():
             #Modular Commands
-            #directs the command to the handling module
-            return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:])
+            #directs the command to the handling module on this node
+            return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:],command[0])
 
         else:
-            #search for node who can process requested command
+
+            #search for thread of node that can use this command
             foundNode = self.ReturnNodeHandler(command[1])
 
             #get node of sender - to pass to the handler node
@@ -220,21 +260,25 @@ class NodeGen():
             else:
                 #Thread that runs the handler + listening ports of requester + initial request of user
                 #This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
-                return foundNode.RetValues()["Thread"] + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+                return foundNode + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
 
     def AppendModules(self):
-        self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule(self._nodeType)
+        self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule(self._nodeType) #appends to all nodes
 
-        if self._nodeType == "Control":
-            self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
-            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor"}) #Allow spawning of these nodes
-            self.CreateServer(self._IP,True)
-            self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
-        elif self._nodeType == "Client":
+        if self._nodeType == "Client":
             self._modules['MusicPlayer'] = MODULEMusic.MusicModule()
             self._modules['MusicPlayer'].start() #Start the music player, no music is loaded yet though
             self.CreateClient()
             return
+
+        self._modules['LoadRep'] = MODULELoadReporter.LoadReporterModule() #Appends to all non-client nodes
+
+        if self._nodeType == "Control":
+            self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
+            self._modules['LoadBal'] = MODULELoadBalancer.LoadBalancerModule() #handles balancing of nodes
+            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor"}) #Allow spawning of these nodes
+            self.CreateServer(self._IP,True)
+            self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
         elif self._nodeType == "Echo":
             self._modules['Echo'] = MODULEEcho.EchoModule()
             self.CreateServer(self._IP,False)
@@ -249,6 +293,7 @@ class NodeGen():
             input("Press any key to continue... ")
             exit()
 
+
         while True:
             self.LoopNode() #This is not accessed by the client, which has its own built in loopnode
 
@@ -261,10 +306,17 @@ class NodeGen():
                 self._nodeHandlers[x].append(node)
 
     def ReturnNodeHandler(self,requestedCommand): #Returns the first node that can handle a command
-        #TODO also this currently only contacts the first spawned node for a command
-
         if requestedCommand in self._nodeHandlers:
-            return self._nodeHandlers[requestedCommand][0]
+            if "LoadBal" in self._modules: #get the first node that isnt busy if the node is designed to handle load balancing
+                threadList = []
+
+                for x in self._nodeHandlers[requestedCommand]:
+                    threadList.append(x.RetValues()["Thread"]) #get all threads that handle this command
+
+                return self._modules['LoadBal'].GetFreeThread(threadList)
+            else:
+                #Occurs for a client who already has an active connection to this node
+                return self._nodeHandlers[requestedCommand][0].RetValues()["Thread"]
         else:
             return "#"
 
@@ -291,7 +343,7 @@ class ExtNode():
         self._commands = []
 
     def RetValues(self):
-        return {"Type" : self._nodeType, "IP" : self._IP, "Port" : self._port, "Thread" : self._threadNum, "Type" : self._nodeType}
+        return {"Type" : self._nodeType, "IP" : self._IP, "Port" : self._port, "Thread" : self._threadNum}
 
     def AddCommand(self,commandName):
         self._commands.append(commandName)
@@ -314,8 +366,8 @@ class ClientInputReader(Thread): #Only used by a client
     def run(self): #request input
         while True:
             submittedRequest = input("")
-            if "@" in submittedRequest or "#" in submittedRequest:
-                print("One or more disallowed characters were detected. Please do not use characters '@' or '#' and resubmit your query")
+            if "@" in submittedRequest or "#" in submittedRequest or "*" in submittedRequest:
+                print("One or more disallowed characters were detected. Please do not use characters '@','#' or '*' and resubmit your query")
             else:
                 self._requests.append(submittedRequest)
                 self._requestFlag = True

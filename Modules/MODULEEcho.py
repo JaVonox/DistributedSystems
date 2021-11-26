@@ -13,5 +13,5 @@ class EchoModule:
     def ReturnCommands(self):
         return list(self._validCommands.keys())
 
-    def CommandPoll(self,command,arguments):
+    def CommandPoll(self,command,arguments,thread):
         return self._validCommands[command](arguments)
