@@ -1,6 +1,6 @@
 class LoadReporterModule: #This exists on all nodes and keeps track of how many connected clients they have
     def __init__(self):
-        self._validCommands = {'*GETLOAD' : self.ReturnLoad, "CLIGETLOAD" : self.ReturnLoad}
+        self._validCommands = {'*GETLOAD' : self.ReturnLoad}
         self._nodeLoad=0 #Number of connected clients
 
     def ReturnLoad(self, arguments): #Gets the load of this node and reports it to the asker

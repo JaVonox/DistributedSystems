@@ -13,7 +13,7 @@ class HeartbeatModule:
         self._myOwnerIP = myOwnerIP #defines the module owner
         self._myOwnerPort = myOwnerPort
 
-    def HeartbeatPort(self, IP, Port):
+    def HeartbeatPort(self, IP, Port): #TODO change name?
         heartbeatSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         heartbeatResult = heartbeatSock.connect_ex((IP, Port))  # attempt connection to port. returns 0 if exists
 

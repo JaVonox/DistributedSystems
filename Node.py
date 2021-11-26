@@ -44,9 +44,9 @@ class NodeGen():
         self._heldCommands = [] #holds commands that require a redirect
 
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 50001 is the prime node.
-
         self.AppendModules()
 
+    #TODO due to the limited ports in the lab add error checking to ensure port is between 50001 and 50010. 50001-50006 are nodes, 50006-50009 are clients
     def CreateServer(self,IP,attemptBase): #Creates a thread listener
 
         for x in self._modules.values(): #gets all module classes that can exist on this node
@@ -82,7 +82,7 @@ class NodeGen():
 
             if self._modules['Heartbeat'].HeartbeatPort(IP,50001): #Set up client listening port
                 print("Found server. Connecting...")
-                self._connectedPort = self._modules['Heartbeat'].FindNextPort(self._IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
+                self._connectedPort = self._modules['Heartbeat'].FindNextPort(self._IP, 50006) #Iterates and returns next available port on specified IP
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
                 self._modules['Service'].start()
 
@@ -118,7 +118,7 @@ class NodeGen():
         if len(self._heldCommands) > 0:
             commandsToKill = []
             for x in self._heldCommands: #this checks if a command is held to be processed - likely a one that would require a DIR response.
-                if self.ReturnNodeHandler(x.split("|")[1]) != "#": #check if a handler now exists for this command
+                if self.ReturnNodeHandler(x.split("|")[1]) != "#" and x.split("|")[0] in self._knownNodes: #check if a handler now exists for this command and the recipient is in the list of known nodes
                     self._modules['Service'].writeCommands.append(self.CommandParser(x)) #resend the command when a handler spawns
                     commandsToKill.append(self._heldCommands.index(x))
 
@@ -132,7 +132,6 @@ class NodeGen():
             needUpdate = self._modules['LoadRep'].UpdateLoad(clients)
             if needUpdate == 1 and "LoadBal" not in self._modules: #when a node value changes but the node does not have a node balancing module
                 #Report change in balance to parent. Each node should only have *one* known control node unless it is a control node itself
-                #TODO verify nodes should not know control nodes?
                 #TODO make nodes shutdown if they no longer know a control node
                 threadOfParent = "" #finds the thread of the parent
                 for b in self._knownNodes.values():
@@ -146,6 +145,15 @@ class NodeGen():
             elif needUpdate == 1 and "LoadBal" in self._modules:
                 #TODO add this - This is when a control node tries to contact its control node parent
                 pass
+        if "LoadBal" in self._modules: #updates the checks to see if any new nodes can be spawned on this IP
+            #TODO ensure node spawner exists
+            nodes=0
+            for a in self._knownNodes.values():
+                if(a.RetValues()["IP"] == self._IP and a.RetValues()["Type"] != "Client"): #checks number of spawned nodes on this IP.
+                    nodes +=1
+
+            self._modules["LoadBal"].UpdateSelfLoadFlag(nodes) #update the system to check if the nodes on one IP has been reached
+            self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
@@ -244,20 +252,45 @@ class NodeGen():
             #search for thread of node that can use this command
             foundNode = self.ReturnNodeHandler(command[1])
 
-            #get node of sender - to pass to the handler node
-            senderNode = self._knownNodes[command[0]]
+            # get node of sender - to pass to the handler node
+            senderNode = None
+            if command[0] in self._knownNodes:
+                senderNode = self._knownNodes[command[0]]
+            else:
+                #Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
+                self._heldCommands.append("|".join(command))
+                #TODO error occurs here when a second client tries to connect to the redirected server.
+                #TODO to clarify - the foreign control node can spawn up multiple new nodes, but cant handle connections from more than one client as of yet.
 
-            if foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
+            if foundNode == "#" and "LoadBal" in self._modules and self._modules["LoadBal"].GetNewNodeNeeded():  # Check if a new IP for a node is needed is needed
+                nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
+
+                if nodeSpawn != "#":
+                    for x in self._IPList:  # loop through the list of ips that a control node should exist on
+                        if x != self._IP and self._modules["Heartbeat"].HeartbeatPort(x, 50001):  # if an ip exists
+                            # TODO handle no living control nodes
+                            #TODO handle other control node cannot take any traffic
+                            #Sends a direction request to the node to attempt to make it handle the command.
+                            #If that node has too much traffic, it will send another request like this and go down the chain effectively
+                            DirectorMessage = "@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+                            self._modules['Service'].ContactNode(x, 50001, "NA", DirectorMessage , "NULL")  # Send a request to accept a new node to the node
+
+                    return command[0] + "|This server is currently under heavy load and is attempting to pass your command onto another server. This may take some time."
+                else:
+                    return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
+            elif foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
                 nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
                 if nodeSpawn != "#":
                     self._modules['NodeSpawn'].Spawn(nodeSpawn)
-                    self._heldCommands.append("|".join(command)) #adds the current command to the list of commands that need handling.
+                    if not "|".join(command) in self._heldCommands: #Prevents a bug where the request would be appended twice
+                        self._heldCommands.append("|".join(command)) #adds the current command to the list of commands that need handling.
                     return command[0] + "|Spawned handler for this command. Please wait for a response."
                 else:
                     return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
             if foundNode == "#": #No known node
                 return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes"
             else:
+
                 #Thread that runs the handler + listening ports of requester + initial request of user
                 #This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
                 return foundNode + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
@@ -375,11 +408,8 @@ class ClientInputReader(Thread): #Only used by a client
 
 def GetConnections():
     #On file is a list of valid IPs. This contains all the IPs the server deems "available" for connection
-    #TODO check if node should be prime or listener??
     #On these IPs a node should be running at the port 50001 - the prime
-    #TODO add listening node functionality
     #A control node can spawn up new nodes on each IP
-    #TODO add this too
 
     #the client will always try to connect to the first in list on port 50001
     #the server will spawn up a node on 127.0.0.1 regardless of what is on the list
@@ -387,8 +417,8 @@ def GetConnections():
     #This node will then find a port (starting at 51322) and then contact its creator and register itself. The listener should still run on 50001 to expect connections
 
     f = open("_ConnectionList.txt", "r")
-    ValidIPs = f.readlines()
-    return ValidIPs
+    ValidIPs = f.readlines()[0] #gets the connection list which is split by | characters
+    return ValidIPs.split("|")
 
 def GetMyValidIP(): #Gets the IP the system can run from
     try:
