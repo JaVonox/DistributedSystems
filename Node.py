@@ -61,7 +61,7 @@ class NodeGen():
             self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
             self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType, self._IP, self._connectedPort)
 
-        elif attemptBase is True:
+        elif attemptBase is True: #TODO this might cause problems if two or more control nodes exist on a single connection
             self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType,IP, 50001)
             self._connectedPort = 50001
 
@@ -82,7 +82,7 @@ class NodeGen():
 
             if self._modules['Heartbeat'].HeartbeatPort(IP,50001): #Set up client listening port
                 print("Found server. Connecting...")
-                self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
+                self._connectedPort = self._modules['Heartbeat'].FindNextPort(self._IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
                 self._modules['Service'].start()
 
@@ -144,7 +144,7 @@ class NodeGen():
                 self._modules['Service'].writeCommands.append(message) #This does not need to go through command parser because it is already a complete command
                 pass
             elif needUpdate == 1 and "LoadBal" in self._modules:
-                #TODO add this
+                #TODO add this - This is when a control node tries to contact its control node parent
                 pass
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
