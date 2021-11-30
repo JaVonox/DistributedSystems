@@ -27,11 +27,13 @@ class SpawnerModule:
         self._myIP = myIP
         self._myPort = myPort
 
-    def UpdateRedir(self,value): #sets the redirect mode - this is set by the loadbalancer and determines if the node can make new nodes for another control node
+    def UpdateRedir(self,value): #sets the redirect mode - this is set by the loadbalancer and determines if the node can accept new nodes
+        #TODO maybe make this so that a report is made to peer controls?
         self._canRecieveRedir = value
 
     def AcceptRedirect(self,arguments,thread): #Checks if this node can accept a new connection at this time. Spawns new node if true, returns false if overloaded
         #TODO this is not being handled currently - there is always a noop (#) response regardless of success - this cant be done.
+        #TODO is this even used???
         if self._canRecieveRedir == True:
             subprocess.Popen(['python', 'Node.py', arguments[4], str(arguments[1]), str(arguments[2])],creationflags=subprocess.CREATE_NEW_CONSOLE) #sets parent as sender redirect
             return "#"

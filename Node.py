@@ -37,7 +37,7 @@ class NodeGen():
         self._parentIP = parentIP
         self._parentPort = parentPort
 
-        self._knownNodes = {} # Thread : NodeData
+        self._knownNodes = {} # Socket Address : NodeData
 
         self._commandHandlers = {} #command : handler (Self commands)
         self._nodeHandlers = defaultdict(list) #command : [List of known nodes who can handle that command (in EXTNODE format)]
@@ -130,6 +130,7 @@ class NodeGen():
                 if(a.RetValues()["Type"] == "Client"):
                     clients+=1
             needUpdate = self._modules['LoadRep'].UpdateLoad(clients)
+
             if needUpdate == 1 and "LoadBal" not in self._modules: #when a node value changes but the node does not have a node balancing module
                 #Report change in balance to parent. Each node should only have *one* known control node unless it is a control node itself
                 #TODO make nodes shutdown if they no longer know a control node
@@ -147,12 +148,12 @@ class NodeGen():
                 pass
         if "LoadBal" in self._modules: #updates the checks to see if any new nodes can be spawned on this IP
             #TODO ensure node spawner exists
-            nodes=0
+            clients=0
             for a in self._knownNodes.values():
-                if(a.RetValues()["IP"] == self._IP and a.RetValues()["Type"] != "Client"): #checks number of spawned nodes on this IP.
-                    nodes +=1
+                if(a.RetValues()["Type"] == "Client"): #checks number of active client connections on this IP
+                    clients +=1
 
-            self._modules["LoadBal"].UpdateSelfLoadFlag(nodes) #update the system to check if the nodes on one IP has been reached
+            self._modules["LoadBal"].UpdateSelfLoadFlag(clients) #update the system to check if the requested number of clients has been reached
             self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
@@ -183,6 +184,27 @@ class NodeGen():
                 selfload = str(self._modules['LoadRep'].ReturnLoad({""}))
 
             if command[1] == "@REG": #GET REGISTER COMMAND - EXPECT REP RESPONSE
+
+                if "LoadBal" in self._modules:
+                    if self._modules["LoadBal"].GetNewNodeNeeded(): #If this client needs a new control node redirect
+                        self._modules["LoadBal"].addressesNeedingRedirect.append((command[3],command[4])) #adds the element to the list of items needing redirect
+                        print(self._modules["LoadBal"].addressesNeedingRedirect)
+                        #TODO left off here
+
+                        """
+                        So it currently stores the IP and port of a client needing a redirect
+                        This should then be sent around to the known control nodes one at a time - which perhaps the control node should contact at the start of the system runtime??
+                        If the other control responds with a positive request, the node assumes it has made the connection and breaks connection
+                        If the other control, we move onto the next in the list
+                        
+                        Starting off by contacting all other nodes wont work because that would assume they all existed simultaneously
+                        
+                        Im so sorry to leave this with you, future me, but holy fuck I need to stop. Remember to check isaks love notes if you need moral support
+                        Il go drink a cold one for you
+                        """
+
+                        return command[0] + "|@NOSPACE" #send client data that no space is available
+
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
                 self._modules['Service'].DefineType(command[0],command[2])
                 self._knownNodes[command[0]] = newNode
@@ -223,16 +245,21 @@ class NodeGen():
 
                     if "LoadBal" in self._modules:
                         self._modules["LoadBal"].KillThread(command[0])
-                else:
-                    pass
-                #TODO test with more than one node of same type
+
+                    return "-1|#"
+
+            elif command[1] == "@NOSPACE": #This tells a client that there is no space on this control and to expect a redirect
+                #TODO wait until a new control contacts the client, then close the original connection when required.
+                print("This server is currently overloaded, please wait for a redirect.")
+                #TODO make client close old control.
+                pass
 
             elif command[1] == "@FIL" and self._nodeType == "Client": #this accepts a file as parameters, used for sending music across the network. only accepted by clients
                 #This expects the bytes as a hex in command[2], then converts back to bytes
                 self._modules['MusicPlayer'].PlayMusic([bytes.fromhex(command[2])])
                 return command[0] + "|#"
 
-            return "-1|#"
+            return "-1|#" #TODO whats this doin here
 
 
         elif self._nodeType == "Client": #Clients only service @ commands
@@ -262,23 +289,28 @@ class NodeGen():
                 #TODO error occurs here when a second client tries to connect to the redirected server.
                 #TODO to clarify - the foreign control node can spawn up multiple new nodes, but cant handle connections from more than one client as of yet.
 
-            if foundNode == "#" and "LoadBal" in self._modules and self._modules["LoadBal"].GetNewNodeNeeded():  # Check if a new IP for a node is needed is needed
-                nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
+            #if foundNode == "#" and "LoadBal" in self._modules and self._modules[
+            #    "LoadBal"].GetNewNodeNeeded():  # Check if a new IP for a node is needed is needed
+            #    nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
+            #
+            #    if nodeSpawn != "#":
+            #        for x in self._IPList:  # loop through the list of ips that a control node should exist on
+            #            if x != self._IP and self._modules["Heartbeat"].HeartbeatPort(x, 50001):  # if an ip exists
+            #                # TODO handle no living control nodes
+            #                # TODO handle other control node cannot take any traffic
+            #                # Sends a direction request to the node to attempt to make it handle the command.
+            #                # If that node has too much traffic, it will send another request like this and go down the chain effectively
+            #                DirectorMessage = "@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(
+            #                    senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+            #                self._modules['Service'].ContactNode(x, 50001, "NA", DirectorMessage,
+            #                                                     "NULL")  # Send a request to accept a new node to the node
 
-                if nodeSpawn != "#":
-                    for x in self._IPList:  # loop through the list of ips that a control node should exist on
-                        if x != self._IP and self._modules["Heartbeat"].HeartbeatPort(x, 50001):  # if an ip exists
-                            # TODO handle no living control nodes
-                            #TODO handle other control node cannot take any traffic
-                            #Sends a direction request to the node to attempt to make it handle the command.
-                            #If that node has too much traffic, it will send another request like this and go down the chain effectively
-                            DirectorMessage = "@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
-                            self._modules['Service'].ContactNode(x, 50001, "NA", DirectorMessage , "NULL")  # Send a request to accept a new node to the node
-
-                    return command[0] + "|This server is currently under heavy load and is attempting to pass your command onto another server. This may take some time."
-                else:
-                    return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
-            elif foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
+            #        return command[
+            #                   0] + "|This server is currently under heavy load and is attempting to pass your command onto another server. This may take some time."
+            #    else:
+            #        return command[
+            #                   0] + "|This node does not know the requested command nor any nodes than can handle it"
+            if foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
                 nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
                 if nodeSpawn != "#":
                     self._modules['NodeSpawn'].Spawn(nodeSpawn)
@@ -294,6 +326,17 @@ class NodeGen():
                 #Thread that runs the handler + listening ports of requester + initial request of user
                 #This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
                 return foundNode + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+
+    def ExpectRedirectResponse(self,IP,port):
+     for x in self._IPList:  # loop through the list of ips that a control node should exist on
+        if x != self._IP and self._modules["Heartbeat"].HeartbeatPort(x, 50001):  # if an ip exists
+            # TODO handle no living control nodes
+            # TODO handle other control node cannot take any traffic
+            # Sends a direction request to the node to attempt to make it handle the command.
+            # If that node has too much traffic, it will send another request like this and go down the chain effectively
+            DirectorMessage = "*CANACCEPTLOAD|" + IP + "|" + str(port) #Ask server if it will take the load
+            self._modules['Service'].ContactNode(x, 50001, "NA", DirectorMessage, "NULL")  # Send a request to accept a new node to the node
+
 
     def AppendModules(self):
         self._modules['Heartbeat'] = MODULEHeartbeat.HeartbeatModule(self._nodeType) #appends to all nodes

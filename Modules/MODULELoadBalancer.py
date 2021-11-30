@@ -1,12 +1,14 @@
 class LoadBalancerModule: #This exists on only control nodes and handles the redirection of nodes and polling of connected nodes
     def __init__(self):
-        self._validCommands = {"*LOADUPDATE" : self.UpdateClientLoad}
+        self._validCommands = {"*LOADUPDATE" : self.UpdateClientLoad, "*CANACCEPTLOAD" : self.CanAcceptNewNode}
         self._maxLoad = 2 #Constant that determines how many clients can be connected before a new node is needed (0 is not a value in this)
-        self._myIPLoad = 3 #The constant that controls how many systems can exist on a given IP before a new connection must be declared
-        self._nodeLoad = {} #Thread : load
-        self._maxIPFlag = False #True if the max number of nodes on one IP is reached
+        self._nodeLoad = {} #Thread : load. Stores all known non-clients and how many clients they have connected.
 
-    def UpdateClientLoad(self, arguments,thread):
+        self._maxClientsFlag = False #True if the max number of clients on one control is reached
+        self._desiredClients = 3 #This constant determines how many clients a node wishes to handle - this is not a hard limit, but the control will start attempting redirects to controls if this limit is reached.
+        self.addressesNeedingRedirect = [] #(IP,Port,Iteration) Stores which items need redirects
+
+    def UpdateClientLoad(self, arguments,thread): #for non-client nodes
         self._nodeLoad[thread] = arguments[2] #Update the load of the thread
         return "#" #returns no response code
 
@@ -26,21 +28,26 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         if thread in self._nodeLoad: #check this node is being balanced
             del self._nodeLoad[thread] #removes thread from load balancing
 
-    def UpdateSelfLoadFlag(self,spawnedNodes): #checks how many non-client nodes have been spawned, and spawns up a new control node if needed
-        if self._myIPLoad < spawnedNodes:
-            self._maxIPFlag = True
-        else:
-            self._maxIPFlag = False
-
-    def GetNewNodeNeeded(self): #checks if a node must be spawned on another IP
-        if self._maxIPFlag == True:
-            return True
-        else:
-            return False
-
     def RegisterLoad(self,thread,load):
         if load != "NA": #stops registering of clients
             self._nodeLoad[thread] = load
+
+    #Balancing between controls
+
+    def UpdateSelfLoadFlag(self,numberOfClients): #checks how many non-client nodes have been spawned, and spawns up a new control node if needed
+        if self._desiredClients <= numberOfClients:
+            self._maxClientsFlag = True
+        else:
+            self._maxClientsFlag = False
+
+    def GetNewNodeNeeded(self): #checks if a control must be spawned on another IP
+        return self._maxClientsFlag
+
+    def CanAcceptNewNode(self,arguments,thread):
+        if self._maxClientsFlag == True: #TODO this is dumb
+            return "YAOKBRO"
+        else:
+            return "NAHBRO"
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())

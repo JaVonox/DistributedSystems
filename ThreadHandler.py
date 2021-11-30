@@ -86,6 +86,12 @@ class ThreadHandler (Thread):
         self._selector.unregister(key.fileobj)
         key.fileobj.close()
 
+    def KillFromID(self,id):
+        if id in self._activeConnections.keys():
+            self.KillConnection(id)
+        else: #This occurs when a request such as a heartbeat is found - so one that doesnt have an active connection
+            pass
+
     def CollateData(self): #loop through all running connections to get commands and add to outgoing commands list, to be read and processed by Node.py
         for x in self._activeConnections.values():
             commandsToStore = x.data.inb #get all stored read commands for this connection
