@@ -59,10 +59,9 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         itemName = arguments[1] #the "NAME" value of an item
         addressServiced = None
 
-        for x in self.addressesNeedingRedirect: #get the item which the request refers to
-            if "NAME" in x:
-                if str(x["NAME"]) == str(itemName):
-                    addressServiced = self.addressesNeedingRedirect.index(x)
+        for x in self.addressesNeedingRedirect[1:]: #get the item which the request refers to
+            if str(x["NAME"]) == str(itemName):
+                addressServiced = self.addressesNeedingRedirect.index(x)
 
         if arguments[0] == "Y": #New connection was made on foreign port
             print("Redirected") #TODO move

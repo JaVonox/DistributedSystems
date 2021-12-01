@@ -61,8 +61,9 @@ class ThreadHandler (Thread):
     def AppendData(self): #Moves data from writecommands list into the appropriate outb slot
         for NewSend in self.writeCommands:
             x = NewSend.split("|") #splits into array. [0] is the connection
-            if int(x[0]) != -1: #-1 is the code for a connection that does not exist anymore
-                self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
+            if x != '' and int(x[0]) in self._activeConnections: #TODO verify this works. There may be some existing issues
+                if int(x[0]) != -1: #-1 is the code for a connection that does not exist anymore
+                    self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
 
         self.writeCommands.clear()
 
