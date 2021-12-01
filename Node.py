@@ -136,7 +136,7 @@ class NodeGen():
                 #TODO make nodes shutdown if they no longer know a control node
                 threadOfParent = "" #finds the thread of the parent
                 for b in self._knownNodes.values():
-                    if(b.RetValues()["Type"] == "Control"):
+                    if b.RetValues()["Type"] == "Control":
                         threadOfParent = str(b.RetValues()["Thread"])
                         break
                 message = str(threadOfParent) + "|*LOADUPDATE|" + self._IP + "|" + str(self._connectedPort) + "|" + str(clients) #message to send to parent to update their load balancing dataset
@@ -144,16 +144,23 @@ class NodeGen():
                 self._modules['Service'].writeCommands.append(message) #This does not need to go through command parser because it is already a complete command
         if "LoadBal" in self._modules: #updates the checks to see if any new nodes can be spawned on this IP
             clients=0
+            controls=1 #includes self
             for a in self._knownNodes.values():
-                if(a.RetValues()["Type"] == "Client"): #checks number of active client connections on this IP
+                if a.RetValues()["Type"] == "Client": #checks number of active client connections on this IP
                     clients +=1
+                elif a.RetValues()["Type"] == "Control":
+                    controls+=1
 
             self._modules["LoadBal"].UpdateSelfLoadFlag(clients) #update the system to check if the requested number of clients has been reached
             self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
 
+            #TODO add cooldown random interval - but make sure this is run when a control first starts up too.
+            if controls < len(self._IPList): #Checks if there is missing controls contacted
+                self.EstablishControlNetwork()
+
             for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect: #check the amount of active redirect requests and append the written command to the output for each
                 #clientToHandle is tuple - (IP,PORT,Iteration) Where iteration is the next IP to contact in the list of active IPs.
-                self.EstablishControlNetwork()
+                #self.EstablishControlNetwork()
                 pass
 
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
@@ -226,7 +233,7 @@ class NodeGen():
                 if "LoadBal" in self._modules: #if this module can load balance, add the node data into the load balancer
                     self._modules["LoadBal"].RegisterLoad(command[0],command[5]) #append node load
 
-                self.DictCommand(newNode,command[6:]) #add the commands the child can do to a list of commands that a child can process
+                self.DictCommand(newNode,command[6:]) #add the commands the new node can do to a list of commands tha can be processed
                 return command[0] + "|#"
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
@@ -317,20 +324,27 @@ class NodeGen():
         KnownControls = []
 
         for a in self._knownNodes.values(): #iterate through all known nodes
-            if a.RetValues()["Type"] == "Control" or a.RetValues()["IP"] in self._modules['LoadBal'].pingedControlIPs:
-                KnownControls = a.RetValues()["IP"] #adds the IPs to the list of known IPs with active connections
+            if a.RetValues()["Type"] == "Control":
+                print("B")
+                KnownControls.append(a.RetValues()["IP"]) #adds the IPs to the list of known IPs with active connections
 
         for x in self._IPList:
-            if x in KnownControls or x == self._IP: #check if this IP is in the set of known IPs
+            if x in KnownControls or x == self._IP or x in self._modules['LoadBal'].pingedControlIPs: #check if this IP is in the set of known IPs
                 #TODO maybe do heartbeat here??
                 pass
             else:
                 #Create a REG connection to all uncontacted control nodes
                 #TODO handle heartbeat failure???
-                #TODO this might overload the system if there isnt a cooldown
                 if self._modules['Heartbeat'].HeartbeatPort(x,50001): #Check if a control exists on the specified location
-                    self._modules['LoadBal'].pingedControlIPs.append(x) #adds to known controls to stop repeat calls
-                    self._modules['Service'].ContactNode(x, 50001,"NA","CTRL","@REG") #Creates a new REG call to the uncontacted control node
+                    # adds to known controls to stop repeat calls + adds to list of heartbeats that went through - effectively saying "this is where a control node must exist"
+                    #TODO need to think about issue where heartbeat is successful but then service closes before REP is recieved
+                    self._modules['LoadBal'].pingedControlIPs.append(str(x))
+
+                    #Send REP to uncontacted control node - this means no response is expected, but this control node should register itself.
+                    #Since all control nodes should do this, all should register eachother if this function is run on random intervals
+                    #TODO add random interval control node connection
+                    #TODO this could also be used to heartbeat these connections
+                    self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
         pass
 
     def AppendModules(self):
