@@ -9,6 +9,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         self.addressNextName = 0
         self.addressesNeedingRedirect = [{}] #Name,IP,Port,Iteration,Awaiting Stores which items need redirects
         self.pingedControlIPs = [] #This is used externally to stop multiple REG calls to one control
+        self.clientsToAccept = [{}] #IP,Port
         #TODO this assumes a control node wont go down and come back up - maybe work to fix this.
 
     def UpdateClientLoad(self, arguments,thread): #for non-client nodes
@@ -48,6 +49,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
     def CanAcceptNewNode(self,arguments,thread): #Set response for receiving a new client
         #TODO actually send client data on success
         if self._maxClientsFlag == False: #If the limit of clients has not been met
+            self.clientsToAccept.append({"IP" : arguments[0], "PORT" : arguments[1]}) #adds to list of accepted client connections - to be contacted soon
             return "*REDRES|Y|" + arguments[2]
         else: #If the limit has been met
             return "*REDRES|N" + arguments[2]

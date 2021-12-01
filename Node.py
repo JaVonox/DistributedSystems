@@ -34,6 +34,7 @@ class NodeGen():
         self.encodeFormat = "utf-8"
         self._modules = {}
 
+        #Parent stores the ip of the creator for server services, and the ip of the
         self._parentIP = parentIP
         self._parentPort = parentPort
 
@@ -87,16 +88,19 @@ class NodeGen():
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
                 self._modules['Service'].start()
 
+                self._modules['Service'].ContactNode(IP,50001,"NA",["NA"],"@REG")
+
                 print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on non-prime location ({self._IP}, {self._connectedPort})")
                 print("Command Syntax: COMMAND|PARAMS")
 
-                self._modules['Service'].ContactNode(IP,50001,"NA",["NA"],"@REG")
                 self._modules['InputReader'] = ClientInputReader() #Starts thread to handle client entering data
                 self._modules['InputReader'].start()
+
 
                 while True:
                     if self._modules['InputReader'].ReadFlag(): #If a client has submitted a request
                         tmpInputs = self._modules['InputReader'].ReadRequest()
+                        print(self._knownNodes)
                         for x in tmpInputs: #append all submitted inputs
                             if self.CheckSelfCommands(x):
                                 commands = x.split("|") #Gets the first command
@@ -158,6 +162,7 @@ class NodeGen():
             self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
 
             #TODO handle only one control existing
+            #Finds node to balance
             if len(self._modules["LoadBal"].addressesNeedingRedirect) > 1: #due to the 2D array nature of ANR the first value is always a blank value
                 for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect[1:]: #check the amount of active redirect requests and append the written command to the output for each
                     if clientToHandle["AWAIT"] == False: #if AWAIT is false, there is no response currently expected.
@@ -169,6 +174,19 @@ class NodeGen():
                                 self._modules['Service'].writeCommands.append(message)  #Sends a message to the control node with a client redirect request, waits for response back.
                                 break #this breaks because it has sent a request to a control for this client, and now must wait for a response.
                         clientToHandle["ITER"] += 1 #If no returns came through
+
+                    if clientToHandle["ITER"] > len(self._IPList):
+                        print("GONE THROUGH LIST!")
+                        #TODO add handle
+
+            #Handles any balancing that the control has commited to contacting
+            if len(self._modules["LoadBal"].clientsToAccept) > 1:
+                for x in self._modules["LoadBal"].clientsToAccept:
+                    self._modules['Service'].ContactNode(x["IP"], x["PORT"],{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
+
+                self._modules["LoadBal"].clientsToAccept = [{}]
+                print(self._modules["LoadBal"].clientsToAccept)
+                
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
