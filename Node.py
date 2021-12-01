@@ -104,11 +104,13 @@ class NodeGen():
                         for x in tmpInputs: #append all submitted inputs
                             if self.CheckSelfCommands(x):
                                 commands = x.split("|") #Gets the first command
-                                route = self.ReturnNodeHandler(commands[0]) #return the thread of the handler
+                                route = self.ReturnNodeHandler(commands[0]) #return the id of the handler
 
-                                #TODO allow changing of control node?
+                                if route == "#": #if no known node can handle this command
+                                    route = self.ReturnControlID()
+
                                 if route == "#":
-                                    self._modules['Service'].writeCommands.append("0|" + x)  # 0 is prime node. Default contact.
+                                    print("There is currently no active connection and therefore the message could not be processed")
                                 else:
                                     self._modules['Service'].writeCommands.append(str(route) + "|" + x)  # routed node
                     else:
@@ -181,12 +183,12 @@ class NodeGen():
 
             #Handles any balancing that the control has commited to contacting
             if len(self._modules["LoadBal"].clientsToAccept) > 1:
-                for x in self._modules["LoadBal"].clientsToAccept:
-                    self._modules['Service'].ContactNode(x["IP"], x["PORT"],{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                for x in self._modules["LoadBal"].clientsToAccept[1:]:
+                    self._modules['Service'].ContactNode(x["IP"], int(x["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
 
                 self._modules["LoadBal"].clientsToAccept = [{}]
                 print(self._modules["LoadBal"].clientsToAccept)
-                
+
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
 
@@ -432,6 +434,14 @@ class NodeGen():
                 return self._nodeHandlers[requestedCommand][0].RetValues()["Thread"]
         else:
             return "#"
+
+    def ReturnControlID(self): #gets the ID of the control node for the client to contact. there should only ever be one control node in the known nodes for a client
+        for x in self._knownNodes:
+            if x.RetValues()["Type"] == "Control":
+                return x.RetValues()["Thread"]
+
+        return "#"
+
 
     def KillNode(self,node): #this removes a node that has died from the list of command handlers
         tmpCommands = self._nodeHandlers #all nodes known by this client
