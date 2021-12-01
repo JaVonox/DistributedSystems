@@ -8,12 +8,12 @@ from threading import Thread
 #list of commands to not print when sent/recieved and what should be printed instead.
 #These commands are used too often and clog up space in the console. So its not worth it to show the print
 #This applies to clients only
-#TODO append the @NOSPACE command
 ignoredCommands = [
     "@REG",
     "@REP",
     "@DIR",
-    "@FIL"
+    "@FIL",
+    "@NOSPACE"
 ]
 class ThreadHandler (Thread):
     def __init__(self,sType, host, port):
@@ -61,7 +61,7 @@ class ThreadHandler (Thread):
     def AppendData(self): #Moves data from writecommands list into the appropriate outb slot
         for NewSend in self.writeCommands:
             x = NewSend.split("|") #splits into array. [0] is the connection
-            if x[0] != '' and int(x[0]) in self._activeConnections: #TODO verify this works. There may be some existing issues
+            if x[0] != '' and int(x[0]) in self._activeConnections:
                 if int(x[0]) != -1: #-1 is the code for a connection that does not exist anymore
                     self._activeConnections[int(x[0])].data.outb.put("|".join(x[1:])) #appends the new data to be sent out
 

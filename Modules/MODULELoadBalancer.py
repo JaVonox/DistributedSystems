@@ -47,11 +47,11 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         return self._maxClientsFlag
 
     def CanAcceptNewNode(self,arguments,thread): #Set response for receiving a new client
-        #TODO actually send client data on success
         if self._maxClientsFlag == False: #If the limit of clients has not been met
             self.clientsToAccept.append({"IP" : arguments[0], "PORT" : arguments[1]}) #adds to list of accepted client connections - to be contacted soon
             return "*REDRES|Y|" + arguments[2]
         else: #If the limit has been met
+            #TODO this is yet to be properly handled
             return "*REDRES|N|" + arguments[2]
 
     def SendRedirection(self,item): #This returns a redirect message for the address needing redirect in question, or removes it from the active objects if needed

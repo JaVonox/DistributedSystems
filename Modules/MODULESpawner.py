@@ -5,19 +5,11 @@ from Modules import MODULEFileSend
 
 class SpawnerModule:
     def __init__(self):
-        self._validCommands = {"*HANDLEREDIR" : self.AcceptRedirect}
+        self._validCommands = {}
         self._myIP = ""
         self._myPort = ""
         self._validNodes = {}
         self._canRecieveRedir = True #set by the load balancer - determines if this node is able to spawn new nodes
-
-    def NodeSpawnParse(self,arguments,thread): #choose which node to spawn
-        #TODO check if this is unused
-        if arguments[0] in self._validNodes:
-            return self.Spawn(arguments[0])
-        else:
-            return "Invalid Node Type"
-
 
     def Spawn(self,NodeType):
         subprocess.Popen(['python', 'Node.py', NodeType,str(self._myIP),str(self._myPort)],creationflags=subprocess.CREATE_NEW_CONSOLE)  # subprocessing based node generation. Adds argument control to define node type to generate
@@ -28,17 +20,7 @@ class SpawnerModule:
         self._myPort = myPort
 
     def UpdateRedir(self,value): #sets the redirect mode - this is set by the loadbalancer and determines if the node can accept new nodes
-        #TODO maybe make this so that a report is made to peer controls?
         self._canRecieveRedir = value
-
-    def AcceptRedirect(self,arguments,thread): #Checks if this node can accept a new connection at this time. Spawns new node if true, returns false if overloaded
-        #TODO this is not being handled currently - there is always a noop (#) response regardless of success - this cant be done.
-        #TODO is this even used???
-        if self._canRecieveRedir == True:
-            subprocess.Popen(['python', 'Node.py', arguments[4], str(arguments[1]), str(arguments[2])],creationflags=subprocess.CREATE_NEW_CONSOLE) #sets parent as sender redirect
-            return "#"
-        else:
-            return "#"
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())

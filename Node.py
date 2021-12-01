@@ -166,6 +166,11 @@ class NodeGen():
             #Finds node to balance
             if len(self._modules["LoadBal"].addressesNeedingRedirect) > 1: #due to the 2D array nature of ANR the first value is always a blank value
                 for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect[1:]: #check the amount of active redirect requests and append the written command to the output for each
+                    if int(clientToHandle["ITER"]) > len(self._IPList):
+                        print("GONE THROUGH LIST!")
+                        #TODO add handler. THIS WILL INFINITELY LOOP FOR NOW.
+                        break
+
                     if clientToHandle["AWAIT"] == False: #if AWAIT is false, there is no response currently expected.
                         for x in controls:
                             if self._IPList[clientToHandle["ITER"]] == x.RetValues()["IP"]: #if the current control to check is this object
@@ -176,9 +181,6 @@ class NodeGen():
                                 break #this breaks because it has sent a request to a control for this client, and now must wait for a response.
                         clientToHandle["ITER"] += 1 #If no returns came through
 
-                    if clientToHandle["ITER"] > len(self._IPList):
-                        print("GONE THROUGH LIST!")
-                        #TODO add handle
 
             #Handles any balancing that the control has commited to contacting
             if len(self._modules["LoadBal"].clientsToAccept) > 1:
@@ -207,7 +209,7 @@ class NodeGen():
         #RouteThread|Command|Argument1|Argument2 etc.
         command = [' ' if a == '' else a for a in command] #replaces all empty commands with a space to stop index errors
 
-        if command[1][0] == "@": #TODO maybe pack the @ commands into their own module?
+        if command[1][0] == "@":
             # Builtin Commands (start with @). Queries containing @ cannot be manually entered
 
             #this ensures the client reports its load as NA but other nodes report the correct load
@@ -272,7 +274,6 @@ class NodeGen():
                 return "-1|#"
 
             elif command[1] == "@NOSPACE": #This tells a client that there is no space on this control and to expect a redirect
-                #TODO wait until a new control contacts the client, then close the original connection when required.
                 print("This server is currently overloaded, please wait for a redirect...")
                 self._modules["Service"].KillFromID(command[0]) #closes the server/client connection
 
@@ -294,10 +295,6 @@ class NodeGen():
 
         elif self._nodeType == "Client": #Clients only service @ commands
             return command[0] + "|#" #NOOP command
-
-        elif command[1] == "HELP":
-            #TODO remove * commands from this list
-            return command[0] + "|Network is currently running the following commands: " + str(",".join(self._commandHandlers.keys())) + ":" + str(",".join(self._nodeHandlers.keys()))
 
         elif command[1] in self._commandHandlers.keys():
             #Modular Commands
@@ -473,7 +470,6 @@ class ExtNode():
         self._commands.append(commandName)
 
 class ClientInputReader(Thread): #Only used by a client
-    #TODO make checks to ensure the client actually has an active connection before attempting any output
     def __init__(self):
         Thread.__init__(self)
         self._requests = []

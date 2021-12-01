@@ -17,7 +17,7 @@ class DistributorModule:
             return "An unknown error occurred"
 
     def GetList(self,arguments):
-        #TODO if using folders, os.listdir will return folder names
+        #if using folders, os.listdir will return folder names
         listFiles = os.listdir("Music/") #gets a list of all files in the music directory.
         for x in listFiles:
             listFiles[listFiles.index(x)] = os.path.splitext(x)[0] #gets just files without extension
