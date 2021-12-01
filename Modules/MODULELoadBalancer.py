@@ -7,6 +7,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         self._maxClientsFlag = False #True if the max number of clients on one control is reached
         self._desiredClients = 3 #This constant determines how many clients a node wishes to handle - this is not a hard limit, but the control will start attempting redirects to controls if this limit is reached.
         self.addressesNeedingRedirect = [] #(IP,Port,Iteration) Stores which items need redirects
+        self.pingedControlIPs = [] #This is used externally to stop multiple REG calls to one control
 
     def UpdateClientLoad(self, arguments,thread): #for non-client nodes
         self._nodeLoad[thread] = arguments[2] #Update the load of the thread

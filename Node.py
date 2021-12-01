@@ -151,11 +151,9 @@ class NodeGen():
             self._modules["LoadBal"].UpdateSelfLoadFlag(clients) #update the system to check if the requested number of clients has been reached
             self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
 
-            for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect(): #check the amount of active redirect requests and append the written command to the output for each
+            for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect: #check the amount of active redirect requests and append the written command to the output for each
                 #clientToHandle is tuple - (IP,PORT,Iteration) Where iteration is the next IP to contact in the list of active IPs.
                 self.EstablishControlNetwork()
-                print(self._knownNodes.values())
-                print("Handling oh no!")
                 pass
 
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
@@ -315,11 +313,11 @@ class NodeGen():
 
     def EstablishControlNetwork(self): #This sends a contact request to all listed controls in the IP list - skipping those that an active connection already exists for.
         #This is only used by control nodes
-
+        #TODO check for non control accessors
         KnownControls = []
 
-        for a in self._knownNodes: #iterate through all known nodes
-            if(a.RetValues()["Type"] == "Control"):
+        for a in self._knownNodes.values(): #iterate through all known nodes
+            if a.RetValues()["Type"] == "Control" or a.RetValues()["IP"] in self._modules['LoadBal'].pingedControlIPs:
                 KnownControls = a.RetValues()["IP"] #adds the IPs to the list of known IPs with active connections
 
         for x in self._IPList:
@@ -331,6 +329,7 @@ class NodeGen():
                 #TODO handle heartbeat failure???
                 #TODO this might overload the system if there isnt a cooldown
                 if self._modules['Heartbeat'].HeartbeatPort(x,50001): #Check if a control exists on the specified location
+                    self._modules['LoadBal'].pingedControlIPs.append(x) #adds to known controls to stop repeat calls
                     self._modules['Service'].ContactNode(x, 50001,"NA","CTRL","@REG") #Creates a new REG call to the uncontacted control node
         pass
 
