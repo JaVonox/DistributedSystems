@@ -100,7 +100,6 @@ class NodeGen():
                 while True:
                     if self._modules['InputReader'].ReadFlag(): #If a client has submitted a request
                         tmpInputs = self._modules['InputReader'].ReadRequest()
-                        print(self._knownNodes)
                         for x in tmpInputs: #append all submitted inputs
                             if self.CheckSelfCommands(x):
                                 commands = x.split("|") #Gets the first command
@@ -187,7 +186,6 @@ class NodeGen():
                     self._modules['Service'].ContactNode(x["IP"], int(x["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
 
                 self._modules["LoadBal"].clientsToAccept = [{}]
-                print(self._modules["LoadBal"].clientsToAccept)
 
         time.sleep(0.05) #This stops high performance usage without impacting the speed of the system too much
         pass
@@ -239,6 +237,9 @@ class NodeGen():
                 message = command[0] + "|@REP|" + self._nodeType + "|" + self._IP + "|" + str(self._connectedPort) + "|" + selfload
                 for x in self._commandHandlers.keys():  # Append list of any commands this node can handle, for routing later.
                     message += "|" + x
+
+                if str(command[2]) == "Control" and self._nodeType == "Client":
+                    print("Connected to control node at (" + str(command[3]) + "," + str(command[4]) + ")")
 
                 return message
 
@@ -436,7 +437,7 @@ class NodeGen():
             return "#"
 
     def ReturnControlID(self): #gets the ID of the control node for the client to contact. there should only ever be one control node in the known nodes for a client
-        for x in self._knownNodes:
+        for x in self._knownNodes.values():
             if x.RetValues()["Type"] == "Control":
                 return x.RetValues()["Thread"]
 

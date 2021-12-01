@@ -52,7 +52,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
             self.clientsToAccept.append({"IP" : arguments[0], "PORT" : arguments[1]}) #adds to list of accepted client connections - to be contacted soon
             return "*REDRES|Y|" + arguments[2]
         else: #If the limit has been met
-            return "*REDRES|N" + arguments[2]
+            return "*REDRES|N|" + arguments[2]
 
     def SendRedirection(self,item): #This returns a redirect message for the address needing redirect in question, or removes it from the active objects if needed
         return "*CANACCEPTLOAD" + "|" + str(item["IP"]) + "|" + str(item["PORT"]) + "|" + str(item["NAME"])
@@ -66,10 +66,8 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
                 addressServiced = self.addressesNeedingRedirect.index(x)
 
         if arguments[0] == "Y": #New connection was made on foreign port
-            print("Redirected") #TODO move
             del self.addressesNeedingRedirect[addressServiced]
         elif arguments[0] == "N": #Could not accept connection
-            print("Couldnt redirect") #TODO move
             #Tell service to find next possible item
             self.addressesNeedingRedirect[addressServiced]["AWAIT"] = False
             self.addressesNeedingRedirect[addressServiced]["ITER"] +=1
