@@ -46,6 +46,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         return self._maxClientsFlag
 
     def CanAcceptNewNode(self,arguments,thread): #Set response for receiving a new client
+        #TODO actually send client data on success
         if self._maxClientsFlag == False: #If the limit of clients has not been met
             return "*REDRES|Y|" + arguments[2]
         else: #If the limit has been met
@@ -55,16 +56,19 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         return "*CANACCEPTLOAD" + "|" + str(item["IP"]) + "|" + str(item["PORT"]) + "|" + str(item["NAME"])
 
     def RecieveRedirectUpdate(self,arguments,thread):
-        itemName = arguments[2] #the "NAME" value of an item
+        itemName = arguments[1] #the "NAME" value of an item
         addressServiced = None
 
         for x in self.addressesNeedingRedirect: #get the item which the request refers to
-            if str(x["NAME"]) == str(itemName):
-                addressServiced = self.addressesNeedingRedirect.index(x)
+            if "NAME" in x:
+                if str(x["NAME"]) == str(itemName):
+                    addressServiced = self.addressesNeedingRedirect.index(x)
 
         if arguments[0] == "Y": #New connection was made on foreign port
+            print("Redirected") #TODO move
             del self.addressesNeedingRedirect[addressServiced]
         elif arguments[0] == "N": #Could not accept connection
+            print("Couldnt redirect") #TODO move
             #Tell service to find next possible item
             self.addressesNeedingRedirect[addressServiced]["AWAIT"] = False
             self.addressesNeedingRedirect[addressServiced]["ITER"] +=1
