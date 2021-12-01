@@ -1,5 +1,4 @@
 import socket
-import selectors
 
 class HeartbeatModule:
     def __init__(self,Type):

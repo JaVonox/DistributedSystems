@@ -49,6 +49,9 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         else:
             return "NAHBRO"
 
+    def SendRedirection(self,item): #This returns a redirect message for the address needing redirect in question, or removes it from the active objects if needed
+        pass
+
     def ReturnCommands(self):
         return list(self._validCommands.keys())
 

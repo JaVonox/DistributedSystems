@@ -8,6 +8,7 @@ from threading import Thread
 #list of commands to not print when sent/recieved and what should be printed instead.
 #These commands are used too often and clog up space in the console. So its not worth it to show the print
 #This applies to clients only
+#TODO append the @NOSPACE command
 ignoredCommands = [
     "@REG",
     "@REP",
@@ -87,8 +88,8 @@ class ThreadHandler (Thread):
         key.fileobj.close()
 
     def KillFromID(self,id):
-        if id in self._activeConnections.keys():
-            self.KillConnection(id)
+        if int(id) in self._activeConnections.keys():
+            self.KillConnection(self._activeConnections[int(id)])
         else: #This occurs when a request such as a heartbeat is found - so one that doesnt have an active connection
             pass
 
