@@ -27,7 +27,6 @@ class HeartbeatModule:
     def FindNextPort(self,IP,startingPort): #iterate through ports on ip to find next available port
         desiredPort = startingPort  # next available port
 
-        #TODO this assumes clients wont join at the same time
         while True:
             if self.HeartbeatPort(IP, desiredPort):
                 desiredPort = desiredPort + 1

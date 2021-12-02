@@ -59,13 +59,17 @@ class NodeGen():
         #On 50001 a control node must exist
 
         if attemptBase is False or self._modules['Heartbeat'].HeartbeatPort(IP,50001): #loads into nonprime location if node does not request prime or if a prime node exists
+            if attemptBase is True: #This occurs when the control node already exists but there is already one for this IP
+                print("A control node already exists on this address.")
+                input("Press any key to continue...")
+                exit()
+            else:
+                self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
+                self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType, self._IP, self._connectedPort)
 
-            self._connectedPort = self._modules['Heartbeat'].FindNextPort(IP, (self._parentPort + 1 if self._parentPort != 0 else 50002)) #Iterates and returns next available port on specified IP
-            self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType, self._IP, self._connectedPort)
-
-        elif attemptBase is True: #TODO this might cause problems if two or more control nodes exist on a single connection
-            self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType,IP, 50001)
-            self._connectedPort = 50001
+        elif attemptBase is True: #If the node to be spawned is prime and there is no existing node on 50001
+                self._modules['Service'] = ThreadHandler.ThreadHandler(self._nodeType,IP, 50001)
+                self._connectedPort = 50001
 
         print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on ({self._IP}, {self._connectedPort})")
 
@@ -162,16 +166,13 @@ class NodeGen():
             self._modules["LoadBal"].UpdateSelfLoadFlag(clients) #update the system to check if the requested number of clients has been reached
             self._modules["NodeSpawn"].UpdateRedir = not self._modules["LoadBal"].GetNewNodeNeeded() #the spawner is set to accept new redirects if the IP is not full
 
-            #TODO handle only one control existing
             #Finds node to balance
             if len(self._modules["LoadBal"].addressesNeedingRedirect) > 1: #due to the 2D array nature of ANR the first value is always a blank value
                 deleteObj = None
                 for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect[1:]: #check the amount of active redirect requests and append the written command to the output for each
-                    print(clientToHandle["ITER"])
                     if int(clientToHandle["ITER"]) > len(self._IPList):
-                        print("GONE THROUGH LIST!")
                         deleteObj = self._modules['LoadBal'].addressesNeedingRedirect.index(clientToHandle)
-                        #TODO add handler. THIS WILL INFINITELY LOOP FOR NOW.
+                        #This will append the object to the deleteObj, permitting it to be contacted by the existing control
                         break
 
                     if clientToHandle["AWAIT"] == False: #if AWAIT is false, there is no response currently expected.
@@ -236,7 +237,6 @@ class NodeGen():
 
                         return command[0] + "|@NOSPACE" #send client data that no space is available, this causes them to kill their connection and expect a new one
 
-                #TODO if a control node exists in memory with the same IP, replace it, as it must have died and been replaced.
                 newNode = ExtNode(command[2],command[3],command[4],command[0])
                 self._modules['Service'].DefineType(command[0],command[2])
                 self._knownNodes[command[0]] = newNode
@@ -344,7 +344,6 @@ class NodeGen():
 
     def EstablishControlNetwork(self): #This sends a contact request to all listed controls in the IP list - skipping those that an active connection already exists for.
         #This is only used by control nodes
-        #TODO check for non control accessors
 
         controls = []  # excludes self
 
@@ -362,17 +361,14 @@ class NodeGen():
 
                 for x in self._IPList:
                     if x in KnownControls or x == self._IP or x in self._modules['LoadBal'].pingedControlIPs: #check if this IP is in the set of known IPs
-                        #TODO maybe do heartbeat here??
                         pass
                     else:
                         #Create a REG connection to all uncontacted control nodes
-                        #TODO handle heartbeat failure???
                         #Heartbeating a location takes a lot of time, which is why this segment must be on a thread
                         if self._modules['Heartbeat'].HeartbeatPort(x,50001): #Check if a control exists on the specified location
                             # adds to known controls to stop repeat calls + adds to list of heartbeats that went through - effectively saying "this is where a control node must exist"
-                            #TODO need to think about issue where heartbeat is successful but then service closes before REP is recieved
-                            #TODO maybe in killNode check for control and then remove the IP it is on from the pingedControlIPs
                             self._modules['LoadBal'].pingedControlIPs.append(str(x))
+                            #TODO maybe reping control IPs every once in a while to make sure they still exist
 
                             #Send REP to uncontacted control node - this means no response is expected, but this control node should register itself.
                             #Since all control nodes should do this, all should register eachother if this function is run on random intervals
