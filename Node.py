@@ -21,6 +21,7 @@ from Modules import MODULEMusic
 from Modules import MODULEFileSend
 from Modules import MODULELoadBalancer
 from Modules import MODULELoadReporter
+from Modules import MODULEAuth
 
 from threading import Thread
 from collections import defaultdict
@@ -302,6 +303,16 @@ class NodeGen():
                 self._modules['MusicPlayer'].PlayMusic([bytes.fromhex(command[2])])
                 return command[0] + "|#"
 
+            #Stores the key given by an auth node
+            elif command[1] == "@AUTHGRANT" and self._nodeType == "Client":
+                print("Login Accepted")
+                self._modules['InputReader'].AuthKeyUpdate(command[2]) #Adds the auth key to the auth key processor
+                return command[0] + "|#"
+
+            elif command[1] == "@AUTHDENY" and self._nodeType == "Client":
+                print("Invalid credentials")
+                return command[0] + "|#"
+
 
         elif self._nodeType == "Client": #Clients only service @ commands
             return command[0] + "|#" #NOOP command
@@ -312,6 +323,10 @@ class NodeGen():
             return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:],command[0])
 
         else:
+
+            if command[-1] == "NOAUTH" and self._modules['NodeSpawn'].GetCommandHandler(command[1]) != "Authentication": #TODO okay this is dumb. Just replace this outright.
+                #Check the command isnt router to the authentication node
+                return command[0] + "|Please login to the system"
 
             #search for thread of node that can use this command
             foundNode = self.ReturnNodeHandler(command[1])
@@ -391,7 +406,7 @@ class NodeGen():
         if self._nodeType == "Control":
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
             self._modules['LoadBal'] = MODULELoadBalancer.LoadBalancerModule() #handles balancing of nodes
-            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor"}) #Allow spawning of these nodes
+            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor","Authentication"}) #Allow spawning of these nodes
             self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
 
@@ -407,6 +422,10 @@ class NodeGen():
         elif self._nodeType == "Distributor": #used to handle the sending of files across a network
             self._modules['Distributor'] = MODULEFileSend.DistributorModule()
             self.CreateServer(self._IP,False)
+        elif self._nodeType == "Authentication":
+            self._modules['Auth'] = MODULEAuth.AuthenticationModule()
+            self.CreateServer(self._IP,False)
+            self._modules['Auth'].CacheLogins()
         else:
             print("Invalid node type")
             input("Press any key to continue... ")
@@ -480,6 +499,10 @@ class ClientInputReader(Thread): #Only used by a client
         Thread.__init__(self)
         self._requests = []
         self._requestFlag = False #False if no new input, True if new Input
+        self._myAuthKey = "NOAUTH" #Sets an auth key on login request
+
+    def AuthKeyUpdate(self,newAuth):
+        self._myAuthKey = newAuth
 
     def ReadRequest(self):
         tmpRequest = self._requests.copy()
@@ -496,20 +519,12 @@ class ClientInputReader(Thread): #Only used by a client
             if "@" in submittedRequest or "#" in submittedRequest or "*" in submittedRequest:
                 print("One or more disallowed characters were detected. Please do not use characters '@','#' or '*' and resubmit your query")
             else:
-                self._requests.append(submittedRequest)
+                self._requests.append(submittedRequest + "|" + self._myAuthKey) #TODO if any changes are made to security, this needs to be changed since it displays the auth key
+                #TODO however, if auth keys are client specific, this wont matter
                 self._requestFlag = True
 
 
 def GetConnections():
-    #On file is a list of valid IPs. This contains all the IPs the server deems "available" for connection
-    #On these IPs a node should be running at the port 50001 - the prime
-    #A control node can spawn up new nodes on each IP
-
-    #the client will always try to connect to the first in list on port 50001
-    #the server will spawn up a node on 127.0.0.1 regardless of what is on the list
-    #the file solely points to which IPs a listener might exist on - if a listener exists on 50001 and is contacted it will spawn up a new node of the requested type
-    #This node will then find a port (starting at 51322) and then contact its creator and register itself. The listener should still run on 50001 to expect connections
-
     f = open("_ConnectionList.txt", "r")
     ValidIPs = f.readlines()[0] #gets the connection list which is split by | characters
     return ValidIPs.split("|")

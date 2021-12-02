@@ -1,6 +1,7 @@
 import subprocess
 from Modules import MODULEEcho
 from Modules import MODULEDict
+from Modules import MODULEAuth
 from Modules import MODULEFileSend
 
 class SpawnerModule:
@@ -56,8 +57,11 @@ class SpawnerModule:
                     return x
             return "#"
 
+#TODO this assumes all nodes will have 1 module each, there may need to be changes to this system made as it does not support scaling
+
 spawnables = {  # list of all possible nodes to spawn
     "Control" : SpawnerModule(),
     "Echo": MODULEEcho.EchoModule(),
     "Dictionary": MODULEDict.DictModule(),
-    "Distributor": MODULEFileSend.DistributorModule()}
+    "Distributor": MODULEFileSend.DistributorModule(),
+    "Authentication" : MODULEAuth.AuthenticationModule()}

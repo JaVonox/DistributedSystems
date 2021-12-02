@@ -13,7 +13,9 @@ ignoredCommands = [
     "@REP",
     "@DIR",
     "@FIL",
-    "@NOSPACE"
+    "@NOSPACE",
+    "@AUTHGRANT",
+    "@AUTHDENY"
 ]
 class ThreadHandler (Thread):
     def __init__(self,sType, host, port):
