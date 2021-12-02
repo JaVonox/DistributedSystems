@@ -165,9 +165,12 @@ class NodeGen():
             #TODO handle only one control existing
             #Finds node to balance
             if len(self._modules["LoadBal"].addressesNeedingRedirect) > 1: #due to the 2D array nature of ANR the first value is always a blank value
+                deleteObj = None
                 for clientToHandle in self._modules['LoadBal'].addressesNeedingRedirect[1:]: #check the amount of active redirect requests and append the written command to the output for each
+                    print(clientToHandle["ITER"])
                     if int(clientToHandle["ITER"]) > len(self._IPList):
                         print("GONE THROUGH LIST!")
+                        deleteObj = self._modules['LoadBal'].addressesNeedingRedirect.index(clientToHandle)
                         #TODO add handler. THIS WILL INFINITELY LOOP FOR NOW.
                         break
 
@@ -178,9 +181,16 @@ class NodeGen():
                                 message += str(self._modules['LoadBal'].SendRedirection(clientToHandle))
                                 clientToHandle["AWAIT"] = True
                                 self._modules['Service'].writeCommands.append(message)  #Sends a message to the control node with a client redirect request, waits for response back.
-                                break #this breaks because it has sent a request to a control for this client, and now must wait for a response.
+                                break
+
                         clientToHandle["ITER"] += 1 #If no returns came through
 
+                if deleteObj is not None:
+                    print("Couldnt find route for client. Accepting request.")
+                    #The service registers itself, bypassing the client limit, as it could not find a suitable peer, and therefore must accept the connection itself
+                    self._modules['Service'].ContactNode(clientToHandle["IP"], int(clientToHandle["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                    del self._modules['LoadBal'].addressesNeedingRedirect[deleteObj]
+                    deleteObj = None
 
             #Handles any balancing that the control has commited to contacting
             if len(self._modules["LoadBal"].clientsToAccept) > 1:
@@ -530,7 +540,10 @@ if len(sys.argv) > 1:
     parentPort = int(sys.argv[3])
 else:
     nodeRequest = input("Create node: ")
-
+    if nodeRequest != "Client" and nodeRequest != "Control":
+        print("Valid inputs are 'Client' and 'Control'")
+        input("Press any character to continue...")
+        exit()
 
 
 NodeGen(nodeRequest, parentIP, parentPort, GetConnections(), GetMyValidIP()) #spawns up new node of specified type
