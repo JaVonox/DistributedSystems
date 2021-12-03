@@ -8,7 +8,7 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         self._desiredClients = 3 #This constant determines how many clients a node wishes to handle - this is not a hard limit, but the control will start attempting redirects to controls if this limit is reached.
         self.addressNextName = 0
         self.addressesNeedingRedirect = [{}] #Name,IP,Port,Iteration,Awaiting Stores which items need redirects
-        self.pingedControlIPs = [] #This is used externally to stop multiple REG calls to one control
+        self.pingedControlIPs = [] #This is used externally to stop multiple REP calls to one control
         self.clientsToAccept = [{}] #IP,Port
         #TODO this assumes a control node wont go down and come back up - maybe work to fix this.
 
@@ -72,6 +72,10 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
             self.addressesNeedingRedirect[addressServiced]["ITER"] +=1
 
         return "#"
+
+    def KilLPingFromIP(self,IP): #removes a control from the set if it goes down, allowing the system to reping control nodes
+        if IP in self.pingedControlIPs:
+            self.pingedControlIPs.remove(IP)
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())

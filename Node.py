@@ -188,10 +188,10 @@ class NodeGen():
 
                         clientToHandle["ITER"] += 1 #If no returns came through
 
-                if deleteObj is not None:
+                if deleteObj is not None: #TODO CHECK THIS WORKS
                     print("Couldnt find route for client. Accepting request.")
                     #The service registers itself, bypassing the client limit, as it could not find a suitable peer, and therefore must accept the connection itself
-                    self._modules['Service'].ContactNode(clientToHandle["IP"], int(clientToHandle["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                    self._modules['Service'].ContactNode(deleteObj["IP"], int(deleteObj["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
                     del self._modules['LoadBal'].addressesNeedingRedirect[deleteObj]
                     deleteObj = None
 
@@ -277,11 +277,17 @@ class NodeGen():
                 #Closed should always be received if a connection closes, since the reading node itself will create this request if it loses a connection
                 if command[0] in self._knownNodes: #if the id is in the known nodes
                     deadNode = self._knownNodes[command[0]]
+                    deadNodeIP = deadNode.RetValues()["IP"]
+                    deadNodeType = deadNode.RetValues()["Type"]
+
                     self.KillNode(deadNode)
                     del self._knownNodes[command[0]] #remove node from list of nodes
 
                     if "LoadBal" in self._modules:
                         self._modules["LoadBal"].KillThread(command[0])
+                        if deadNodeType == "Control": #Removes this control from the list of actively pinged controls - thereby allowing this control to be checked again for updates
+                            self._modules["LoadBal"].KilLPingFromIP(deadNodeIP)
+
 
                 return "-1|#"
 
@@ -382,14 +388,15 @@ class NodeGen():
                         #Create a REG connection to all uncontacted control nodes
                         #Heartbeating a location takes a lot of time, which is why this segment must be on a thread
                         if self._modules['Heartbeat'].HeartbeatPort(x,50001): #Check if a control exists on the specified location
-                            # adds to known controls to stop repeat calls + adds to list of heartbeats that went through - effectively saying "this is where a control node must exist"
+                            #adds to known controls to stop repeat calls + adds to list of heartbeats that went through - effectively saying "this is where a control node must exist"
+                            #a control will be removed from this set if it disconnects
                             self._modules['LoadBal'].pingedControlIPs.append(str(x))
-                            #TODO maybe heartbeat control IPs every once in a while to make sure they still exist
 
                             #Send REP to uncontacted control node - this means no response is expected, but this control node should register itself.
                             #Since all control nodes should do this, all should register eachother if this function is run on random intervals
 
-                            self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
+                            newThread = self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
+                            self._modules['Service'].ContactNode(x, 50001,"NA","*GETMUSIC","NULL") #Call to get music from node
 
                 time.sleep(2.5) #Pause for a period of time to free up usage space
 
