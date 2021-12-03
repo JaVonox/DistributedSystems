@@ -2,8 +2,8 @@ import os
 
 class DistributorModule:
     def __init__(self):
-        self._validCommands = {'PLAY' : self.RequestMusic,
-                               "PLAYLIST" : self.GetList}
+        self._validCommands = {'PLAY' : self.RequestMusic}
+                               #"PLAYLIST" : self.GetList}
 
     def RequestMusic(self, arguments): #arguments is the file name - mp3
         try:

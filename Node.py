@@ -22,6 +22,7 @@ from Modules import MODULEFileSend
 from Modules import MODULELoadBalancer
 from Modules import MODULELoadReporter
 from Modules import MODULEAuth
+from Modules import MODULEControlDataRep
 
 from threading import Thread
 from collections import defaultdict
@@ -383,7 +384,7 @@ class NodeGen():
                         if self._modules['Heartbeat'].HeartbeatPort(x,50001): #Check if a control exists on the specified location
                             # adds to known controls to stop repeat calls + adds to list of heartbeats that went through - effectively saying "this is where a control node must exist"
                             self._modules['LoadBal'].pingedControlIPs.append(str(x))
-                            #TODO maybe reping control IPs every once in a while to make sure they still exist
+                            #TODO maybe heartbeat control IPs every once in a while to make sure they still exist
 
                             #Send REP to uncontacted control node - this means no response is expected, but this control node should register itself.
                             #Since all control nodes should do this, all should register eachother if this function is run on random intervals
@@ -407,6 +408,9 @@ class NodeGen():
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
             self._modules['LoadBal'] = MODULELoadBalancer.LoadBalancerModule() #handles balancing of nodes
             self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor","Authentication"}) #Allow spawning of these nodes
+            self._modules['ControlData'] = MODULEControlDataRep.ControlDataModule() #Used for coordinating network data
+            self._modules['ControlData'].AppendOwnMusic()
+
             self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
 
