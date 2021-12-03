@@ -340,8 +340,18 @@ class NodeGen():
             if musicName in self._modules['ControlData'].ReturnOwnMusic():
                 return str(self.HandleCommandDirecting(command[0:]))  # Routes to the appropriate command
             else:
-                if musicName in ",".join(self._modules['ControlData'].ReturnNetPlaylist()):
-                    return command[0] + "|This song is active on another member of the distributed system"
+                if musicName in (self._modules['ControlData'].ReturnNetPlaylist({}, {}).split(",")):
+                    """
+                    Perhaps implement some command in MODULEFileSend that takes a song and a new address to connect to
+                    then just have control send that command to another control with the appropriate music, and have that
+                    control process it as normal
+                    """
+                    #TODO add load balancing somehow
+                    senderNode = self._knownNodes[command[0]]
+                    controlThread = self._modules['ControlData'].GetExtMusicHandler(musicName)
+                    newCommand = "*ROUTEMUSIC|" + musicName
+                    #TODO add client response?
+                    return controlThread + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + newCommand
                 else:
                     return command[0] + "|This song is currently not available on any active member of the system"
 
@@ -441,6 +451,7 @@ class NodeGen():
 
                             newThread = self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
                             self._modules['Service'].ContactNode(x, 50001,"NA","*GETMUSIC","NULL") #Call to get music from node
+                            #TODO need to remove music listing from playlist if the node goes down
 
                 time.sleep(2.5) #Pause for a period of time to free up usage space
 

@@ -2,9 +2,9 @@ import os
 
 class DistributorModule:
     def __init__(self):
-        self._validCommands = {'SPAWN' : self.SpawnTemp}
-        #TODO add !Play to ControlDataRep, client will automatically route to a command with a known music, but for invalid titles it must route to Control
-
+        self._validCommands = { "*ROUTEMUSIC" : self.RoutePlay}
+        #Validcommands is initially almost empty, but it will populate itself with the music it can find on the device
+        #Control nodes also have a copy of this data, and will share it with other control nodes in order to route connections
     def RequestMusic(self, title): #arguments is the file name + .wav
         try:
             reader = open("Music/" + title + ".wav", "rb")
@@ -15,9 +15,6 @@ class DistributorModule:
             return "File not found"
         except:
             return "An unknown error occurred"
-
-    def SpawnTemp(self,arguments): #TODO a server must spawn up a distributor node now, probably should also append valid music. This is a temporary file
-        return "SPAWNED"
 
     def AppendMusicCommands(self):
         listFiles = os.listdir("Music/") #gets a list of all files in the music directory.
@@ -37,6 +34,9 @@ class DistributorModule:
         print(musicTitle)
         #TODO check "" can never happen
         return self.RequestMusic(musicTitle)
+
+    def RoutePlay(self,arguments,thread):
+        return self.RequestMusic(arguments)
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())

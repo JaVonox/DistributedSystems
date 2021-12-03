@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 
 class ControlDataModule: #This module is used to store the necessary data for sharing between control nodes
     #This includes the playlist and valid logins
@@ -37,6 +36,14 @@ class ControlDataModule: #This module is used to store the necessary data for sh
 
     def ReturnOwnMusic(self): #returns set of all music this node can handle
         return self._nodesWithFile["SELF"]
+
+    def GetExtMusicHandler(self,target): #Return the thread of the control node able to handle this request
+        for thread,objects in self._nodesWithFile.items():
+            if target in objects:
+                return str(thread)
+
+        print("MUSIC HANDLER ERROR")
+        return "-1"
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())
