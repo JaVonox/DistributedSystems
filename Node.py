@@ -189,10 +189,11 @@ class NodeGen():
 
                         clientToHandle["ITER"] += 1 #If no returns came through
 
-                if deleteObj is not None: #TODO CHECK THIS WORKS
+                if deleteObj is not None:
                     print("Couldnt find route for client. Accepting request.")
+                    obj = self._modules['LoadBal'].addressesNeedingRedirect[deleteObj]
                     #The service registers itself, bypassing the client limit, as it could not find a suitable peer, and therefore must accept the connection itself
-                    self._modules['Service'].ContactNode(deleteObj["IP"], int(deleteObj["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
+                    self._modules['Service'].ContactNode(obj["IP"], int(obj["PORT"]),{""},self._commandHandlers.keys(),"@REG") #Creates a new REG call
                     del self._modules['LoadBal'].addressesNeedingRedirect[deleteObj]
                     deleteObj = None
 
@@ -355,6 +356,13 @@ class NodeGen():
                     return command[0] + "|This song is currently not available on any active member of the system"
 
         elif command[1] in self._commandHandlers.keys():
+
+            #Poll authentication. If this module is the authenticator then bypass this
+            if "Auth" not in self._modules:
+                authResult = self.CheckAuthKey(command[-1], command[0])
+                if authResult != "ACCEPT":
+                    return authResult
+
             #Modular Commands
             #directs the command to the handling module on this node
             args = command[2:]
@@ -382,8 +390,10 @@ class NodeGen():
             return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
 
     def CheckAuthKey(self,key,target):
-        if key == "NOAUTH":  # TODO okay this is dumb. Just replace this outright.
-            # Check the command isnt router to the authentication node
+        if str(key) == "NOAUTH":  #TODO rework this.
+            #TODO the current implementation does not account for node type, as only clients would have a request with NOAUTH at the end
+            #TODO switching this to use anything aside from == "NOAUTH" will require reworking the function
+
             return target + "|Please login to the system"
         else:
             return "ACCEPT"

@@ -22,7 +22,6 @@ class ControlDataModule: #This module is used to store the necessary data for sh
         self._nodesWithFile[thread] = arguments[0:]
         return "#"
 
-    #TODO the most important part of this will be routing to the correct control node
     def ReturnNetPlaylist(self,arguments,thread): #returns the playlist for the client
         #TODO this must check for authentication
         musicSet = []
