@@ -130,7 +130,8 @@ class NodeGen():
         if len(self._heldCommands) > 0:
             commandsToKill = []
             for x in self._heldCommands: #this checks if a command is held to be processed - likely a one that would require a DIR response.
-                if self.ReturnNodeHandler(x.split("|")[1]) != "#" and x.split("|")[0] in self._knownNodes: #check if a handler now exists for this command and the recipient is in the list of known nodes
+                if self.ReturnNodeHandler(x.split("|")[1]) != "#" and (x.split("|")[0] in self._knownNodes or x.split("|")[0][0] == "("): #check if a handler now exists for this command and the recipient is in the list of known nodes
+                    #use of check for ( stops DIRNC from being stopped
                     self._modules['Service'].writeCommands.append(self.CommandParser(x)) #resend the command when a handler spawns
                     commandsToKill.append(self._heldCommands.index(x))
 
@@ -345,11 +346,6 @@ class NodeGen():
                 return str(self.HandleCommandDirecting(command[0:]))  # Routes to the appropriate command
             else:
                 if musicName in (self._modules['ControlData'].ReturnNetPlaylist({}, {}).split(",")):
-                    """
-                    Perhaps implement some command in MODULEFileSend that takes a song and a new address to connect to
-                    then just have control send that command to another control with the appropriate music, and have that
-                    control process it as normal
-                    """
                     #TODO add load balancing somehow
                     senderNode = self._knownNodes[command[0]]
                     controlThread = self._modules['ControlData'].GetExtMusicHandler(musicName)
@@ -402,13 +398,13 @@ class NodeGen():
         if command[0] in self._knownNodes:
             senderNode = self._knownNodes[command[0]]
         else:
-            if str(command[0])[1] == "(": #This occurs on a DIRNC command, inwhich a connection is issued without the redirector making a connection to the client
+            if str(command[0])[0] == "(": #This occurs on a DIRNC command, inwhich a connection is issued without the redirector making a connection to the client
                 splitRedir = command[0].split(",")
 
-                splitRedir[0].replace('(','')
-                splitRedir[1].replace(')','')
+                fixedIP = splitRedir[0].replace('(','')
+                fixedPort = splitRedir[1].replace(')','')
 
-                senderNode = ExtNode("REDIR",splitRedir[0],splitRedir[1],"NULL")
+                senderNode = ExtNode("REDIR",fixedIP,fixedPort,"NULL")
             else:
                 # Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
                 self._heldCommands.append("|".join(command))
