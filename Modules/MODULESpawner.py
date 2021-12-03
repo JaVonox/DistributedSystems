@@ -37,6 +37,12 @@ class SpawnerModule:
             self._validNodes[node] = spawnables[node].ReturnCommands()
         pass
 
+    def AppendMusicSpawnables(self,ownMusic): #Adds the music that a spawnable distributor will be able to handle on spawn
+        if "Distributor" in self._validNodes:
+            for x in ownMusic:
+                self._validNodes["Distributor"].append("!PLAY:" + x)
+
+
     def GetSpawnableCommands(self): #return dictionary of all valid commands
         commandsAvailable = []
 

@@ -312,27 +312,42 @@ class NodeGen():
 
             #Stores the key given by an auth node
             elif command[1] == "@AUTHGRANT" and self._nodeType == "Client":
-                print("Login Accepted")
+                print("--- Login Accepted ---")
                 self._modules['InputReader'].AuthKeyUpdate(command[2]) #Adds the auth key to the auth key processor
                 return command[0] + "|#"
 
             elif command[1] == "@AUTHDENY" and self._nodeType == "Client":
-                print("Invalid credentials")
+                print("--- Invalid credentials ---")
                 return command[0] + "|#"
 
         elif self._nodeType == "Client": #Clients only service @ commands
             return command[0] + "|#" #NOOP command
 
         elif self._nodeType == "Control" and str(command[1]).startswith("!PLAY"):
-            #TODO add authentication for this!
-            print("Control handling request")
-            #A client will only send this request to a control node if they attempt to play music that they do not have an active connection towards
-            return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
+            #A client will only send this request to a control node if they attempt to play music that they do not have an active connection towards a handler for this song
+
+            authResult = "ACCEPT"
+            authResult = self.CheckAuthKey(command[-1],command[0])
+
+            if authResult != "ACCEPT":
+                return authResult
+
+            musicName = ""
+
+            if ":" in str(command[1]): #Gives musicPlayer nodes the music name as an argument
+                musicName = (str(command[1].split(":")[1])) #Gets first segment after : split
+
+            if musicName in self._modules['ControlData'].ReturnOwnMusic():
+                return str(self.HandleCommandDirecting(command[0:]))  # Routes to the appropriate command
+            else:
+                if musicName in ",".join(self._modules['ControlData'].ReturnNetPlaylist()):
+                    return command[0] + "|This song is active on another member of the distributed system"
+                else:
+                    return command[0] + "|This song is currently not available on any active member of the system"
 
         elif command[1] in self._commandHandlers.keys():
             #Modular Commands
             #directs the command to the handling module on this node
-
             args = command[2:]
 
             if ":" in str(command[1]): #Gives musicPlayer nodes the music name as an argument
@@ -342,13 +357,27 @@ class NodeGen():
 
         else:
 
-            #A user cannot spawn up any nodes aside from auth if they do not have authorisation, therefore only the control node needs to handle authorisation
-            if 'NodeSpawn' in self._modules: #TODO maybe make this its own function?
-                if command[-1] == "NOAUTH" and self._modules['NodeSpawn'].GetCommandHandler(command[1]) != "Authentication": #TODO okay this is dumb. Just replace this outright.
-                    #Check the command isnt router to the authentication node
-                    return command[0] + "|Please login to the system"
+            #Authenticate for non-Auth requests
+
+            authResult = "ACCEPT"
+
+            if 'NodeSpawn' in self._modules:
+                if self._modules['NodeSpawn'].GetCommandHandler(command[1]) != "Authentication":
+                    authResult = self.CheckAuthKey(command[-1],command[0])
+            else:
+                authResult = self.CheckAuthKey(command[-1], command[0])
+
+            if authResult != "ACCEPT":
+                return authResult
 
             return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
+
+    def CheckAuthKey(self,key,target):
+        if key == "NOAUTH":  # TODO okay this is dumb. Just replace this outright.
+            # Check the command isnt router to the authentication node
+            return target + "|Please login to the system"
+        else:
+            return "ACCEPT"
 
     def HandleCommandDirecting(self,command):
         # search for thread of node that can use this command
@@ -373,7 +402,7 @@ class NodeGen():
             else:
                 return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
         if foundNode == "#":  # No known node
-            return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes"
+            return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes" #This should never occur
         else:
             # Thread that runs the handler + listening ports of requester + initial request of user
             # This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
@@ -429,10 +458,10 @@ class NodeGen():
         if self._nodeType == "Control":
             self._modules['NodeSpawn'] = MODULESpawner.SpawnerModule()
             self._modules['LoadBal'] = MODULELoadBalancer.LoadBalancerModule() #handles balancing of nodes
-            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor","Authentication"}) #Allow spawning of these nodes
             self._modules['ControlData'] = MODULEControlDataRep.ControlDataModule() #Used for coordinating network data
             self._modules['ControlData'].AppendOwnMusic()
-
+            self._modules['NodeSpawn'].AppendSpawnables({"Control","Echo","Dictionary","Distributor","Authentication"}) #Allow spawning of these nodes
+            self._modules['NodeSpawn'].AppendMusicSpawnables(self._modules['ControlData'].ReturnOwnMusic())
             self.CreateServer(self._IP,True)
             self._modules['NodeSpawn'].DefineSelf(self._IP, self._connectedPort)  # Set self into spawner
 

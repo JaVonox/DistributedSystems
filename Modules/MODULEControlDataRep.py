@@ -5,22 +5,22 @@ class ControlDataModule: #This module is used to store the necessary data for sh
     #This includes the playlist and valid logins
     def __init__(self):
         self._validCommands = {'*GETMUSIC' : self.GetList, '*COLLATEMUSIC' : self.CollateMusic, 'PLAYLIST' : self.ReturnNetPlaylist}
-        self._nodesPerFile = {} #Thread : {Music List}
+        self._nodesWithFile = {} #Thread : {Music List}
 
     def AppendOwnMusic(self):
         listFiles = os.listdir("Music/") #gets a list of all files in the music directory.
         for x in listFiles:
             listFiles[listFiles.index(x)] = os.path.splitext(x)[0] #gets just files without extension
 
-        self._nodesPerFile["SELF"] = listFiles #adds own music to set
+        self._nodesWithFile["SELF"] = listFiles #adds own music to set
 
     def GetList(self,arguments,thread):
         #Returns all of the files on this device, used for coordinating all the files on the system
-        return "*COLLATEMUSIC|" + "|".join(self._nodesPerFile["SELF"]) #returns the list of files without extensions
+        return "*COLLATEMUSIC|" + "|".join(self._nodesWithFile["SELF"]) #returns the list of files without extensions
 
     def CollateMusic(self,arguments,thread):
         #Arguments will include all the music, thread is the selector name attached to the control node
-        self._nodesPerFile[thread] = arguments[0:]
+        self._nodesWithFile[thread] = arguments[0:]
         return "#"
 
     #TODO the most important part of this will be routing to the correct control node
@@ -28,15 +28,15 @@ class ControlDataModule: #This module is used to store the necessary data for sh
         #TODO this must check for authentication
         musicSet = []
 
-        for x in self._nodesPerFile.values():
+        for x in self._nodesWithFile.values():
             for y in x:
                 if not y in musicSet:
                     musicSet.append(y)
 
         return str(",".join(musicSet))
 
-    def ReturnMusicHandler(self):
-        pass
+    def ReturnOwnMusic(self): #returns set of all music this node can handle
+        return self._nodesWithFile["SELF"]
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())
