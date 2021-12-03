@@ -408,11 +408,20 @@ class NodeGen():
                 self._modules['NodeSpawn'].Spawn(nodeSpawn)
                 if not "|".join(command) in self._heldCommands:  # Prevents a bug where the request would be appended twice
                     self._heldCommands.append("|".join(command))  # adds the current command to the list of commands that need handling.
-                return command[0] + "|Spawned handler for this command. Please wait for a response."
+                if senderNode != None:
+                    return command[0] + "|Spawned handler for this command. Please wait for a response."
+                else:
+                    return "-1|#"
             else:
-                return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
+                if senderNode != None:
+                    return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
+                else:
+                    return "-1|#"
         if foundNode == "#":  # No known node
-            return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes" #This should never occur
+            if senderNode != None:
+                return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes" #This should never occur
+            else:
+                return "-1|#"
         else:
             # Thread that runs the handler + listening ports of requester + initial request of user
             # This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly

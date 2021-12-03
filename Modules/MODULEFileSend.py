@@ -31,12 +31,11 @@ class DistributorModule:
             if ":" in str(x):
                 musicTitle = x.replace(':','')
 
-        print(musicTitle)
         #TODO check "" can never happen
         return self.RequestMusic(musicTitle)
 
     def RoutePlay(self,arguments):
-        return self.RequestMusic(arguments)
+        return self.RequestMusic(arguments[0])
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())
