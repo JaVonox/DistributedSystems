@@ -320,49 +320,64 @@ class NodeGen():
                 print("Invalid credentials")
                 return command[0] + "|#"
 
-
         elif self._nodeType == "Client": #Clients only service @ commands
             return command[0] + "|#" #NOOP command
+
+        elif self._nodeType == "Control" and str(command[1]).startswith("!PLAY"):
+            #TODO add authentication for this!
+            print("Control handling request")
+            #A client will only send this request to a control node if they attempt to play music that they do not have an active connection towards
+            return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
 
         elif command[1] in self._commandHandlers.keys():
             #Modular Commands
             #directs the command to the handling module on this node
-            return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],command[2:],command[0])
+
+            args = command[2:]
+
+            if ":" in str(command[1]): #Gives musicPlayer nodes the music name as an argument
+                args.append(":" + str(command[1].split(":")[1])) #Gets first segment after : split
+
+            return command[0] + "|" + self._commandHandlers[command[1]].CommandPoll(command[1],args,command[0])
 
         else:
 
-            if command[-1] == "NOAUTH" and self._modules['NodeSpawn'].GetCommandHandler(command[1]) != "Authentication": #TODO okay this is dumb. Just replace this outright.
-                #Check the command isnt router to the authentication node
-                return command[0] + "|Please login to the system"
+            #A user cannot spawn up any nodes aside from auth if they do not have authorisation, therefore only the control node needs to handle authorisation
+            if 'NodeSpawn' in self._modules: #TODO maybe make this its own function?
+                if command[-1] == "NOAUTH" and self._modules['NodeSpawn'].GetCommandHandler(command[1]) != "Authentication": #TODO okay this is dumb. Just replace this outright.
+                    #Check the command isnt router to the authentication node
+                    return command[0] + "|Please login to the system"
 
-            #search for thread of node that can use this command
-            foundNode = self.ReturnNodeHandler(command[1])
+            return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
 
-            # get node of sender - to pass to the handler node
-            senderNode = None
+    def HandleCommandDirecting(self,command):
+        # search for thread of node that can use this command
+        foundNode = self.ReturnNodeHandler(command[1])
 
-            if command[0] in self._knownNodes:
-                senderNode = self._knownNodes[command[0]]
+        # get node of sender - to pass to the handler node
+        senderNode = None
+
+        if command[0] in self._knownNodes:
+            senderNode = self._knownNodes[command[0]]
+        else:
+            # Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
+            self._heldCommands.append("|".join(command))
+
+        if foundNode == "#" and 'NodeSpawn' in self._modules.keys():  # If the module has a nodespawner and the module does not already exist
+            nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
+            if nodeSpawn != "#":
+                self._modules['NodeSpawn'].Spawn(nodeSpawn)
+                if not "|".join(command) in self._heldCommands:  # Prevents a bug where the request would be appended twice
+                    self._heldCommands.append("|".join(command))  # adds the current command to the list of commands that need handling.
+                return command[0] + "|Spawned handler for this command. Please wait for a response."
             else:
-                #Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
-                self._heldCommands.append("|".join(command))
-                #return command[0] + "|#" #No response given, just wait until the heldcommands gets it
-
-            if foundNode == "#" and 'NodeSpawn' in self._modules.keys(): #If the module has a nodespawner and the module does not already exist
-                nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
-                if nodeSpawn != "#":
-                    self._modules['NodeSpawn'].Spawn(nodeSpawn)
-                    if not "|".join(command) in self._heldCommands: #Prevents a bug where the request would be appended twice
-                        self._heldCommands.append("|".join(command)) #adds the current command to the list of commands that need handling.
-                    return command[0] + "|Spawned handler for this command. Please wait for a response."
-                else:
-                    return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
-            if foundNode == "#": #No known node
-                return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes"
-            else:
-                #Thread that runs the handler + listening ports of requester + initial request of user
-                #This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
-                return foundNode + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
+                return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
+        if foundNode == "#":  # No known node
+            return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes"
+        else:
+            # Thread that runs the handler + listening ports of requester + initial request of user
+            # This is run when a user first requests a command that a different node may handle, after this the connections will be client to this node directly
+            return foundNode + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + str("|".join(command[1:]))
 
     def EstablishControlNetwork(self): #This sends a contact request to all listed controls in the IP list - skipping those that an active connection already exists for.
         #This is only used by control nodes
@@ -432,6 +447,7 @@ class NodeGen():
             self.CreateServer(self._IP,False)
         elif self._nodeType == "Distributor": #used to handle the sending of files across a network
             self._modules['Distributor'] = MODULEFileSend.DistributorModule()
+            self._modules['Distributor'].AppendMusicCommands() #add all ! commands to the distributor node
             self.CreateServer(self._IP,False)
         elif self._nodeType == "Authentication":
             self._modules['Auth'] = MODULEAuth.AuthenticationModule()

@@ -10,6 +10,8 @@ class AuthenticationModule:
     #TODO for now im just implementing a login that checks against the database on this node
     #TODO since this is distributed systems it probably has to check across all running nodes
 
+    #TODO maybe we dont need a constant client connection for this???
+
     def CheckLogin(self, arguments): #Checks if the login is in the list of valid logins
         #arguments Login|Username|Password
         if arguments[0] in self._logins.keys():

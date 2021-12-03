@@ -2,12 +2,12 @@ import os
 
 class DistributorModule:
     def __init__(self):
-        self._validCommands = {'PLAY' : self.RequestMusic}
-                               #"PLAYLIST" : self.GetList}
+        self._validCommands = {'SPAWN' : self.SpawnTemp}
+        #TODO add !Play to ControlDataRep, client will automatically route to a command with a known music, but for invalid titles it must route to Control
 
-    def RequestMusic(self, arguments): #arguments is the file name - mp3
+    def RequestMusic(self, title): #arguments is the file name + .wav
         try:
-            reader = open("Music/"+ arguments[0] + ".wav", "rb")
+            reader = open("Music/" + title + ".wav", "rb")
             bytesRead = reader.read()
             reader.close()
             return "@FIL|" + str(bytesRead.hex()) #set bytes to hex for easy communication
@@ -16,16 +16,27 @@ class DistributorModule:
         except:
             return "An unknown error occurred"
 
-    #TODO GetList must coordinate with all other nodes on the server
-    #TODO may also have to check against servers that dont have an active file distribution node??
+    def SpawnTemp(self,arguments): #TODO a server must spawn up a distributor node now, probably should also append valid music. This is a temporary file
+        return "SPAWNED"
 
-    def GetList(self,arguments):
-        #if using folders, os.listdir will return folder names
+    def AppendMusicCommands(self):
         listFiles = os.listdir("Music/") #gets a list of all files in the music directory.
         for x in listFiles:
             listFiles[listFiles.index(x)] = os.path.splitext(x)[0] #gets just files without extension
 
-        return "|".join(listFiles) #returns the list of files without extensions
+        for x in listFiles:
+            self._validCommands['!PLAY:' + str(x)] = self.PlayCommand
+
+    def PlayCommand(self,arguments):
+        musicTitle = ""
+
+        for x in arguments:
+            if ":" in str(x):
+                musicTitle = x.replace(':','')
+
+        print(musicTitle)
+        #TODO check "" can never happen
+        return self.RequestMusic(musicTitle)
 
     def ReturnCommands(self):
         return list(self._validCommands.keys())
