@@ -268,11 +268,15 @@ class NodeGen():
                 self.DictCommand(newNode,command[6:]) #add the commands the new node can do to a list of commands tha can be processed
                 return command[0] + "|#"
 
-            elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT
-                #Only runs first time a node has to pass a command onwards
+            elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT and then use the requested command
                 newID = self._modules['Service'].ContactNode(command[2], int(command[3]),selfload,self._commandHandlers.keys(),"@REG") #Creates a new REG call
                 return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
+            elif command[1] == "@DIRNC":
+                #Uses the direct command but without registering the connection
+                #This is a very controlled command which can break the system if used incorrectly. When implementing more usages of this use caution
+                self.CommandParser("(" + str(command[2]) + "," + str(command[3]) + ")|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
+                return "-1|#"
             elif command[1] == "@CLOSED": #If a network connection is closed remove its relevant data from the requested commands
                 #Closed should always be received if a connection closes, since the reading node itself will create this request if it loses a connection
                 if command[0] in self._knownNodes: #if the id is in the known nodes
@@ -350,8 +354,7 @@ class NodeGen():
                     senderNode = self._knownNodes[command[0]]
                     controlThread = self._modules['ControlData'].GetExtMusicHandler(musicName)
                     newCommand = "*ROUTEMUSIC|" + musicName
-                    #TODO add client response?
-                    return controlThread + "|@DIR|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + newCommand
+                    return controlThread + "|@DIRNC|" + str(senderNode.RetValues()["IP"]) + "|" + str(senderNode.RetValues()["Port"]) + "|" + newCommand
                 else:
                     return command[0] + "|This song is currently not available on any active member of the system"
 
@@ -399,8 +402,16 @@ class NodeGen():
         if command[0] in self._knownNodes:
             senderNode = self._knownNodes[command[0]]
         else:
-            # Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
-            self._heldCommands.append("|".join(command))
+            if str(command[0])[1] == "(": #This occurs on a DIRNC command, inwhich a connection is issued without the redirector making a connection to the client
+                splitRedir = command[0].split(",")
+
+                splitRedir[0].replace('(','')
+                splitRedir[1].replace(')','')
+
+                senderNode = ExtNode("REDIR",splitRedir[0],splitRedir[1],"NULL")
+            else:
+                # Forces the system to wait until the sender has been registered - This prevents issues where DIR would attempt to fire before client response
+                self._heldCommands.append("|".join(command))
 
         if foundNode == "#" and 'NodeSpawn' in self._modules.keys():  # If the module has a nodespawner and the module does not already exist
             nodeSpawn = self._modules['NodeSpawn'].GetCommandHandler(command[1])
@@ -408,17 +419,17 @@ class NodeGen():
                 self._modules['NodeSpawn'].Spawn(nodeSpawn)
                 if not "|".join(command) in self._heldCommands:  # Prevents a bug where the request would be appended twice
                     self._heldCommands.append("|".join(command))  # adds the current command to the list of commands that need handling.
-                if senderNode != None:
+                if senderNode.RetValues()["Type"] != "REDIR":
                     return command[0] + "|Spawned handler for this command. Please wait for a response."
                 else:
                     return "-1|#"
             else:
-                if senderNode != None:
+                if senderNode.RetValues()["Type"] != "REDIR":
                     return command[0] + "|This node does not know the requested command nor any nodes than can handle it"
                 else:
                     return "-1|#"
         if foundNode == "#":  # No known node
-            if senderNode != None:
+            if senderNode.RetValues()["Type"] != "REDIR":
                 return command[0] + "|This node does not know the requested command and lacks the ability to create new nodes" #This should never occur
             else:
                 return "-1|#"
