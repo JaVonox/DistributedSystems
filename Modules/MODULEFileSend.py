@@ -35,7 +35,7 @@ class DistributorModule:
         #TODO check "" can never happen
         return self.RequestMusic(musicTitle)
 
-    def RoutePlay(self,arguments,thread):
+    def RoutePlay(self,arguments):
         return self.RequestMusic(arguments)
 
     def ReturnCommands(self):
