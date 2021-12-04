@@ -1,2 +1,2 @@
 ADMIN|Egg
-Natost|bree
+Natost|Password
