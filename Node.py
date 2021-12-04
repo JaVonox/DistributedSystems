@@ -76,6 +76,10 @@ class NodeGen():
 
         print(f"{self._nodeType}({self._IP},{self._connectedPort}): initialised on ({self._IP}, {self._connectedPort})")
 
+        if self._connectedPort > 50010:
+            print("***WARNING*** this node has connected on a port greater than 50010 - the maximum port permitted on markeaton street devices.")
+            print("Due to these limitations, there are potential issues that may arise from usage of this port, that would otherwise not occur")
+
         self._modules['Service'].start()
 
         if self._parentPort != 0 and self._parentIP != 0: #Sends a contact request to the parent node
@@ -93,6 +97,11 @@ class NodeGen():
                 print("Found server. Connecting...")
                 self._connectedPort = self._modules['Heartbeat'].FindNextPort(self._IP, 50006) #Iterates and returns next available port on specified IP
                 self._modules['Service'] = ThreadHandler.ThreadHandler("Client", self._IP, self._connectedPort)
+
+                if self._connectedPort > 50010:
+                    print("***WARNING*** this node has connected on a port greater than 50010 - the maximum port permitted on markeaton street devices.")
+                    print("Due to these limitations, there are potential issues that may arise from usage of this port, that would otherwise not occur")
+
                 self._modules['Service'].start()
 
                 self._modules['Service'].ContactNode(IP,50001,"NA",["NA"],"@REG")
