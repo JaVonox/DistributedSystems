@@ -50,8 +50,10 @@ class NodeGen():
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 50001 is the prime node.
         self.AppendModules()
 
+    #TODO when routing server stuff on the school devices, clients routed to another device will not connect if they are on ports higher than 50010
+    #TODO this means there is a capacity on clients on one device, purely as a result of the restrictions
+    #TODO interestingly, there is not a capacity when only one server exists - it seems that devices can use their own ports fine
     def CreateServer(self,IP,attemptBase): #Creates a thread listener
-
         for x in self._modules.values(): #gets all module classes that can exist on this node
             for y in x.ReturnCommands():
                 self._commandHandlers[y] = x
@@ -183,6 +185,7 @@ class NodeGen():
                                 message += str(self._modules['LoadBal'].SendRedirection(clientToHandle))
                                 clientToHandle["AWAIT"] = True
                                 self._modules['Service'].writeCommands.append(message)  #Sends a message to the control node with a client redirect request, waits for response back.
+                                clientToHandle["ITER"] -= 1 #Makes the iteration stay at the current value after break
                                 break
 
                         clientToHandle["ITER"] += 1 #If no returns came through
@@ -473,7 +476,6 @@ class NodeGen():
 
                             self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
                             self._modules['Service'].ContactNode(x, 50001,"NA","*GETMUSIC","NULL") #Call to get music from node
-                            #TODO need to remove music listing from playlist if the node goes down
 
                 time.sleep(2.5) #Pause for a period of time to free up usage space
 

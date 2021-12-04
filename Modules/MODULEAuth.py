@@ -19,7 +19,7 @@ class AuthenticationModule:
         dataSet = f.readlines()
 
         for line in dataSet:
-            parsedLine = line.split("|") #0 is
+            parsedLine = line.split("|")
             self._logins[str(parsedLine[0].strip())] = str(parsedLine[1].strip())
 
         #Gets all valid logins on this device. ran on startup of the system
