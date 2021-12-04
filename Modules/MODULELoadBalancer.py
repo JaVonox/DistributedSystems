@@ -10,7 +10,6 @@ class LoadBalancerModule: #This exists on only control nodes and handles the red
         self.addressesNeedingRedirect = [{}] #Name,IP,Port,Iteration,Awaiting Stores which items need redirects
         self.pingedControlIPs = [] #This is used externally to stop multiple REP calls to one control
         self.clientsToAccept = [{}] #IP,Port
-        #TODO this assumes a control node wont go down and come back up - maybe work to fix this.
 
     def UpdateClientLoad(self, arguments,thread): #for non-client nodes
         self._nodeLoad[thread] = arguments[2] #Update the load of the thread

@@ -105,29 +105,33 @@ class ThreadHandler (Thread):
 
 
     def ContactNode(self,ConNodeIP,ConNodePort,Load,arguments,messageType): #For node to node. messageType = @REG, @REP etc.
-        sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sockVar.connect((ConNodeIP,ConNodePort))
+        try:
+            sockVar = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sockVar.connect((ConNodeIP,ConNodePort))
 
-        data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer), unfinRead="", readExplen=0, initExplen=0, lastPrint=10)
-        sockVar.setblocking(True)
+            data = types.SimpleNamespace(addr=(ConNodeIP,ConNodePort), inb=[], outb=queue.Queue(), peerType="Node", myName=str(self._connectionNamer), unfinRead="", readExplen=0, initExplen=0, lastPrint=10)
+            sockVar.setblocking(True)
 
-        events = selectors.EVENT_READ | selectors.EVENT_WRITE
-        selectorObj = self._selector.register(sockVar, events, data=data)
+            events = selectors.EVENT_READ | selectors.EVENT_WRITE
+            selectorObj = self._selector.register(sockVar, events, data=data)
 
-        newName = self._connectionNamer
-        self._activeConnections[self._connectionNamer] = selectorObj #adds the connection at the next available address
-        self._connectionNamer += 1 #increment connection namer
+            newName = self._connectionNamer
+            self._activeConnections[self._connectionNamer] = selectorObj #adds the connection at the next available address
+            self._connectionNamer += 1 #increment connection namer
 
-        if messageType != "NULL":
-            message = messageType + "|" + str(self._type) + "|" + str(self._host) + "|" + str(self._port) + "|" + str(Load)
+            if messageType != "NULL":
+                message = messageType + "|" + str(self._type) + "|" + str(self._host) + "|" + str(self._port) + "|" + str(Load)
 
-            for x in arguments: #Append list of any commands this node can handle, for routing later.
-                message += "|" + x
-        else:
-            message = arguments #When given the NULL command, the arguments are expected as a string and will be sent as is
+                for x in arguments: #Append list of any commands this node can handle, for routing later.
+                    message += "|" + x
+            else:
+                message = arguments #When given the NULL command, the arguments are expected as a string and will be sent as is
 
-        self.postMessage(newName, message) #Tell parent what IP and Port this node exists on
-        return newName #Return the new connection name that has been created
+            self.postMessage(newName, message) #Tell parent what IP and Port this node exists on
+            return newName #Return the new connection name that has been created
+        except:
+            print("Connection timed out while attempting to contact a new node. Connection could not be established")
+            return "-1"
 
 
     def _read(self, key):

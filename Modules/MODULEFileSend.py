@@ -31,7 +31,6 @@ class DistributorModule:
             if ":" in str(x):
                 musicTitle = x.replace(':','')
 
-        #TODO check "" can never happen
         return self.RequestMusic(musicTitle)
 
     def RoutePlay(self,arguments):

@@ -63,8 +63,6 @@ class SpawnerModule:
                     return x
             return "#"
 
-#TODO this assumes all nodes will have 1 module each, there may need to be changes to this system made as it does not support scaling
-
 spawnables = {  # list of all possible nodes to spawn
     "Control" : SpawnerModule(),
     "Echo": MODULEEcho.EchoModule(),

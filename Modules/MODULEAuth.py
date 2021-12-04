@@ -5,18 +5,13 @@ class AuthenticationModule:
         self._validCommands = {'LOGIN' : self.CheckLogin}
         self._echoedRequests = []
         self._logins = {}
-        self._validKey = 193940
-
-    #TODO for now im just implementing a login that checks against the database on this node
-    #TODO since this is distributed systems it probably has to check across all running nodes
-
-    #TODO maybe we dont need a constant client connection for this???
+        self._validKey = "AUTHGRANT"
 
     def CheckLogin(self, arguments): #Checks if the login is in the list of valid logins
         #arguments Login|Username|Password
         if arguments[0] in self._logins.keys():
             if arguments[1] == self._logins[arguments[0]]:
-                return "@AUTHGRANT|" + str(self._validKey) #TODO this could *really* do with some form of improvement
+                return "@AUTHGRANT|" + str(self._validKey)
         return "@AUTHDENY|"
 
     def CacheLogins(self):

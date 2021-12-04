@@ -23,7 +23,6 @@ class ControlDataModule: #This module is used to store the necessary data for sh
         return "#"
 
     def ReturnNetPlaylist(self,arguments,thread): #returns the playlist for the client
-        #TODO this must check for authentication
         musicSet = []
 
         for x in self._nodesWithFile.values():
@@ -32,6 +31,10 @@ class ControlDataModule: #This module is used to store the necessary data for sh
                     musicSet.append(y)
 
         return str(",".join(musicSet))
+
+    def KillFromPlaylist(self,arguments,thread): #Removes the music from a node if they disconnect from the system
+        if thread in self._nodesWithFile:
+            del self._nodesWithFile[thread]
 
     def ReturnOwnMusic(self): #returns set of all music this node can handle
         return self._nodesWithFile["SELF"]

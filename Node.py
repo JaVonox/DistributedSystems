@@ -50,7 +50,6 @@ class NodeGen():
         self._IPList = existingIPs #Stores all the IPs that can exist. The first one on 50001 is the prime node.
         self.AppendModules()
 
-    #TODO due to the limited ports in the lab add error checking to ensure port is between 50001 and 50010. 50001-50006 are nodes, 50006-50009 are clients
     def CreateServer(self,IP,attemptBase): #Creates a thread listener
 
         for x in self._modules.values(): #gets all module classes that can exist on this node
@@ -146,7 +145,6 @@ class NodeGen():
 
             if needUpdate == 1 and "LoadBal" not in self._modules: #when a node value changes but the node does not have a node balancing module
                 #Report change in balance to parent. Each node should only have *one* known control node unless it is a control node itself
-                #TODO make nodes shutdown if they no longer know a control node
                 threadOfParent = "" #finds the thread of the parent
                 for b in self._knownNodes.values():
                     if b.RetValues()["Type"] == "Control":
@@ -272,7 +270,10 @@ class NodeGen():
 
             elif command[1] == "@DIR": #This command is sent to a node and tells them to create a new connection with the specified IP/PORT and then use the requested command
                 newID = self._modules['Service'].ContactNode(command[2], int(command[3]),selfload,self._commandHandlers.keys(),"@REG") #Creates a new REG call
-                return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
+                if newID == "-1": #This occurs if an error occured while making the connection. Due to this being caused by connection issues it isnt something that can be fixed
+                    return "-1|#"
+                else:
+                    return self.CommandParser(str(newID) + "|" + command[4] + "|" + str("|".join(command[5:]))) #Calls a recursive command to alleviate issues of writing to the stream too fast
 
             elif command[1] == "@DIRNC":
                 #Uses the direct command but without registering the connection
@@ -293,6 +294,9 @@ class NodeGen():
                         self._modules["LoadBal"].KillThread(command[0])
                         if deadNodeType == "Control": #Removes this control from the list of actively pinged controls - thereby allowing this control to be checked again for updates
                             self._modules["LoadBal"].KilLPingFromIP(deadNodeIP)
+
+                if "ControlData" in self._modules: #Checks if playlist data must be deleted
+                    self._modules["ControlData"].KillFromPlaylist({""},command[0])
 
 
                 return "-1|#"
@@ -347,7 +351,6 @@ class NodeGen():
                 return str(self.HandleCommandDirecting(command[0:]))  # Routes to the appropriate command
             else:
                 if musicName in (self._modules['ControlData'].ReturnNetPlaylist({}, {}).split(",")):
-                    #TODO add load balancing somehow
                     senderNode = self._knownNodes[command[0]]
                     controlThread = self._modules['ControlData'].GetExtMusicHandler(musicName)
                     newCommand = "*ROUTEMUSIC|" + musicName
@@ -390,10 +393,8 @@ class NodeGen():
             return str(self.HandleCommandDirecting(command[0:])) #Routes to the appropriate command
 
     def CheckAuthKey(self,key,target):
-        if str(key) == "NOAUTH":  #TODO rework this.
-            #TODO the current implementation does not account for node type, as only clients would have a request with NOAUTH at the end
-            #TODO switching this to use anything aside from == "NOAUTH" will require reworking the function
-
+        #Very simple authorisation system that only checks if authorisation has not been granted
+        if str(key) == "NOAUTH": #Only clients can report NOAUTH so this will only hit on clients
             return target + "|Please login to the system"
         else:
             return "ACCEPT"
@@ -455,14 +456,9 @@ class NodeGen():
 
         if len(controls) + 1 < len(self._IPList):  # Checks if there is missing controls contacted
             while True:
-                KnownControls = []
-
-                for a in self._knownNodes.values(): #iterate through all known nodes
-                    if a.RetValues()["Type"] == "Control":
-                        KnownControls.append(a.RetValues()["IP"]) #adds the IPs to the list of known IPs with active connections
 
                 for x in self._IPList:
-                    if x in KnownControls or x == self._IP or x in self._modules['LoadBal'].pingedControlIPs: #check if this IP is in the set of known IPs
+                    if x in self._modules['LoadBal'].pingedControlIPs or x == self._IP: #check if this IP is in the set of IPs that have already been contacted
                         pass
                     else:
                         #Create a REG connection to all uncontacted control nodes
@@ -475,7 +471,7 @@ class NodeGen():
                             #Send REP to uncontacted control node - this means no response is expected, but this control node should register itself.
                             #Since all control nodes should do this, all should register eachother if this function is run on random intervals
 
-                            newThread = self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
+                            self._modules['Service'].ContactNode(x, 50001,"NA",{"CTRL"},"@REP") #Creates a new REG call to the uncontacted control node
                             self._modules['Service'].ContactNode(x, 50001,"NA","*GETMUSIC","NULL") #Call to get music from node
                             #TODO need to remove music listing from playlist if the node goes down
 
@@ -612,8 +608,7 @@ class ClientInputReader(Thread): #Only used by a client
             if "@" in submittedRequest or "#" in submittedRequest or "*" in submittedRequest:
                 print("One or more disallowed characters were detected. Please do not use characters '@','#' or '*' and resubmit your query")
             else:
-                self._requests.append(submittedRequest + "|" + self._myAuthKey) #TODO if any changes are made to security, this needs to be changed since it displays the auth key
-                #TODO however, if auth keys are client specific, this wont matter
+                self._requests.append(submittedRequest + "|" + self._myAuthKey)
                 self._requestFlag = True
 
 
